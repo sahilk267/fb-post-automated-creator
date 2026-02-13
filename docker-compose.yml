@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./content_platform.db:/app/content_platform.db
+    environment:
+      - DATABASE_URL=sqlite:///./content_platform.db
+      - DEBUG=false
+    restart: unless-stopped
+

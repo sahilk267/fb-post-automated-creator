@@ -1,0 +1,177 @@
+"""FastAPI application entry point."""
+import logging
+import uuid
+from fastapi import FastAPI, Request, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
+
+from app.core.config import settings
+from app.core.database import init_db
+from app.api.routes import api_router
+import app.models  # noqa: F401 - ensure all model tables registered before init_db()
+
+# Configure logging (minimal but correct)
+logging.basicConfig(
+    level=logging.INFO if not settings.debug else logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    debug=settings.debug
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify allowed origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Global exception handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors."""
+    correlation_id = str(uuid.uuid4())
+    logger.warning(
+        f"[{correlation_id}] Validation error on {request.url.path}: {exc.errors()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": exc.errors(),
+            "correlation_id": correlation_id
+        }
+    )
+
+
+@app.exception_handler(ValidationError)
+async def pydantic_validation_exception_handler(request: Request, exc: ValidationError):
+    """Handle Pydantic ValidationError."""
+    correlation_id = str(uuid.uuid4())
+    logger.warning(
+        f"[{correlation_id}] Pydantic validation error on {request.url.path}: {exc.errors()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": exc.errors(),
+            "correlation_id": correlation_id
+        }
+    )
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    """Handle ValueError (business rule violations)."""
+    correlation_id = str(uuid.uuid4())
+    logger.warning(
+        f"[{correlation_id}] ValueError on {request.url.path}: {str(exc)}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": str(exc),
+            "correlation_id": correlation_id
+        }
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    """Handle database integrity errors."""
+    correlation_id = str(uuid.uuid4())
+    # Sanitize error message (don't expose internal DB details)
+    error_msg = "Database integrity constraint violation"
+    logger.error(
+        f"[{correlation_id}] IntegrityError on {request.url.path}: {str(exc)}",
+        exc_info=exc
+    )
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": error_msg,
+            "correlation_id": correlation_id
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle FastAPI HTTPException (pass through with correlation_id)."""
+    correlation_id = str(uuid.uuid4())
+    logger.info(
+        f"[{correlation_id}] HTTPException {exc.status_code} on {request.url.path}: {exc.detail}"
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "correlation_id": correlation_id
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for all unhandled exceptions."""
+    correlation_id = str(uuid.uuid4())
+    # Log full error with correlation_id (internal logging only)
+    logger.error(
+        f"[{correlation_id}] Unhandled exception on {request.url.path}",
+        exc_info=exc,
+        extra={
+            "correlation_id": correlation_id,
+            "path": request.url.path,
+            "method": request.method,
+        }
+    )
+    # Return generic 500 response (no stack traces in production)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "correlation_id": correlation_id
+        }
+    )
+
+
+# Include API routes
+app.include_router(api_router, prefix=settings.api_prefix)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup."""
+    logger.info("Starting up application...")
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=e)
+        raise
+
+
+@app.get("/")
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "message": "Content Automation Platform API",
+        "version": settings.app_version,
+        "docs": "/docs"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}

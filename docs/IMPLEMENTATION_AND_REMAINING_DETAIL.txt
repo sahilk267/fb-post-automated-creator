@@ -1,0 +1,444 @@
+================================================================================
+  FB PAGE POST CREATOR - IMPLEMENTED vs REMAINING (COMPLETE DETAIL)
+  AUTHORITATIVE TRACKING DOCUMENT - Single source of truth for implemented vs remaining.
+================================================================================
+  PROCESS (phase-wise, mandatory):
+  - Every completed item MUST be updated in this file before moving forward.
+  - Reference order: 1) ROADMAP_AND_PRODUCT.md  2) ARCHITECTURE.md
+    3) this file (IMPLEMENTATION_AND_REMAINING_DETAIL.txt)
+    4) PROJECT_STATUS_SUMMARY.md (high-level only).
+  - Cursor rules (.cursor/rules/*.mdc) must be followed strictly.
+================================================================================
+  Stack: Python/FastAPI. Scaling/MVP scope: ROADMAP_AND_PRODUCT.md
+  Last verified: February 2025. Phases 1–8 DONE (share-psychology + pytest in place).
+================================================================================
+
+--------------------------------------------------------------------------------
+PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
+--------------------------------------------------------------------------------
+
+--- 1.1 CORE INFRASTRUCTURE (100% DONE) ---
+
+  [x] app/core/config.py
+      - Pydantic Settings: app_name, app_version, debug
+      - database_url (default: sqlite:///./content_platform.db)
+      - api_prefix (/api/v1)
+      - .env support
+      - Meta OAuth (optional): facebook_app_id, facebook_app_secret, facebook_redirect_uri, token_encryption_key
+      - cron_secret (optional) for POST /api/v1/cron/run (server-side only)
+
+  [x] app/core/database.py
+      - SQLAlchemy engine (SQLite, check_same_thread=False)
+      - SessionLocal, Base (declarative_base)
+      - get_db() dependency (yield session, auto-close)
+      - init_db() - create_all tables
+
+--- 1.2 DATA LAYER - MODELS (100% DONE) ---
+
+  [x] app/models/user.py
+      - User: id, username, email, full_name, is_active, is_admin, created_at, updated_at
+      - Table: users
+
+  [x] app/models/content.py
+      - ContentStatus enum: DRAFT, PENDING_APPROVAL, APPROVED, REJECTED
+      - Content: id, title, body, status, created_by_id, approved_by_id, created_at, updated_at, approved_at
+      - Relationships: creator, approver (User)
+      - Table: content
+
+  [x] app/models/audit_log.py
+      - AuditLog: id, action, entity_type, entity_id, user_id, description, extra_data (DB column "metadata", JSON), created_at
+      - Relationship: user. API response field remains "metadata"
+      - Table: audit_logs
+
+  [x] app/models/meta_oauth.py
+      - OAuthState: state, user_id, created_at (CSRF for OAuth)
+      - MetaUserToken: user_id, access_token_encrypted, meta_user_id, expires_at, created_at, updated_at
+  [x] app/models/meta_page.py
+      - MetaPage: user_id, page_id, page_name, category, access_token_encrypted, created_at, updated_at
+      - Unique (user_id, page_id); token encrypted at rest
+  [x] app/models/scheduled_post.py
+      - ScheduledPostStatus: PENDING, POSTED, CANCELLED, FAILED
+      - ScheduledPost: content_id, meta_page_id, scheduled_at, status, posted_at, failure_reason, created_at
+  [x] app/models/posting_preference.py
+      - PostingPreference: meta_page_id (unique), cooldown_minutes, max_posts_per_day (safety limits only)
+  [x] app/models/content_category.py - ContentCategory (name, slug, sort_order)
+  [x] app/models/hook_template.py - HookTemplate (name, body_template, default_hook, default_cta, category_id)
+  [x] app/models/__init__.py - exports (incl. ContentCategory, HookTemplate)
+
+--- 1.3 VALIDATION LAYER - SCHEMAS (100% DONE) ---
+
+  [x] app/schemas/user.py - UserCreate, UserResponse (etc.)
+  [x] app/schemas/content.py - ContentCreate, ContentUpdate, ContentResponse, ContentApprovalRequest
+  [x] app/schemas/audit_log.py - AuditLogResponse
+  [x] app/schemas/meta_page.py - MetaPageResponse (no token in response)
+  [x] app/schemas/scheduled_post.py - ScheduledPostCreate, ScheduledPostResponse, PostingPreferenceCreate, PostingPreferenceResponse
+  [x] app/schemas/vce.py - ContentCategoryResponse, HookTemplateResponse, SuggestedCategoryResponse, SuggestedTemplateResponse
+  [x] app/schemas/__init__.py - exports
+
+--- 1.4 BUSINESS LOGIC - SERVICES (100% DONE) ---
+
+  [x] app/services/audit_service.py
+      - AuditService.log_action(db, action, entity_type, entity_id, user_id, description, metadata)
+      - Adds AuditLog to session (no commit - caller commits for atomicity)
+
+  [x] app/services/content_service.py
+      - create_content(content_data, user_id) -> Content (DRAFT, + audit in same transaction)
+      - get_content(content_id) -> Optional[Content]
+      - list_content(skip, limit, status, user_id) -> List[Content]
+      - update_content(content_id, content_data, user_id) -> Optional[Content] (draft only)
+      - submit_for_approval(content_id, user_id) -> Optional[Content]
+      - approve_content(content_id, approval_data, approver_id) -> Optional[Content]
+      - delete_content(content_id, user_id) -> bool (draft only)
+      - Har content operation ke baad AuditService.log_action() call (single transaction)
+
+--- 1.5 API LAYER (100% DONE) ---
+
+  [x] app/api/dependencies.py
+      - get_current_user(user_id query param, db) -> User
+      - Validates user exists + is_active (simplified auth; future: JWT)
+
+  [x] app/api/routes/__init__.py
+      - api_router: content, users, audit-logs, auth/facebook, meta/pages, scheduled-posts, cron
+
+  [x] app/api/routes/content.py (7 endpoints)
+      - POST   /api/v1/content/              -> create_content (201)
+      - GET    /api/v1/content/              -> list_content (filters: skip, limit, status)
+      - GET    /api/v1/content/{id}         -> get_content
+      - PATCH  /api/v1/content/{id}         -> update_content (draft only)
+      - POST   /api/v1/content/{id}/submit  -> submit_for_approval
+      - POST   /api/v1/content/{id}/approve  -> approve_content (admin only)
+      - DELETE /api/v1/content/{id}         -> delete_content (draft only)
+
+  [x] app/api/routes/users.py (3 endpoints)
+      - POST   /api/v1/users/   -> create_user (admin only)
+      - GET    /api/v1/users/  -> list_users (admin only)
+      - GET    /api/v1/users/me -> get current user
+
+  [x] app/api/routes/audit_logs.py (2 endpoints)
+      - GET    /api/v1/audit-logs/     -> list_audit_logs (admin only; filters: entity_type, entity_id, action, skip, limit)
+      - GET    /api/v1/audit-logs/{id} -> get_audit_log (admin only)
+
+--- 1.6 APPLICATION ENTRY & GLOBAL HANDLERS (100% DONE) ---
+
+  [x] app/main.py
+      - FastAPI app (title, version, debug from config)
+      - CORS middleware (allow_origins=["*"])
+      - Exception handlers:
+        - RequestValidationError -> 422 + correlation_id
+        - ValidationError (Pydantic) -> 422
+        - ValueError -> 400 (business rules)
+        - IntegrityError -> 400 (sanitized message)
+        - HTTPException -> pass-through + correlation_id
+        - Exception -> 500 + correlation_id (no stack trace in response)
+      - Routes: api_router with prefix from config
+      - Startup: init_db()
+      - GET /  -> API info (message, version, docs)
+      - GET /health -> {"status": "healthy"}
+
+--- 1.7 DEPLOYMENT & SCRIPTS (100% DONE) ---
+
+  [x] requirements.txt
+      - fastapi==0.104.1, uvicorn[standard]==0.24.0, sqlalchemy==2.0.23
+      - pydantic==2.5.0, pydantic-settings==2.1.0, python-dotenv==1.0.0, python-multipart==0.0.6
+      - cryptography>=41.0.0, httpx>=0.25.0,<0.28.0 (TestClient compat), pytest>=7.4.0
+
+  [x] Dockerfile
+      - python:3.11-slim, WORKDIR /app, COPY requirements + app, EXPOSE 8000
+      - CMD uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  [x] docker-compose.yml (assumed present for Docker runs)
+
+  [x] scripts/init_db.py
+      - init_db() + create_sample_data(): admin user, user1, sample draft + pending content
+
+  [x] .env.example, .gitignore
+
+--- 1.9 FACEBOOK OAUTH - PHASE 1 (IMPLEMENTED) ---
+
+  [x] app/core/token_crypto.py
+      - encrypt_token(plain) / decrypt_token(encrypted) using TOKEN_ENCRYPTION_KEY (Fernet)
+      - No tokens in logs; raises if key not set when storing/reading tokens
+  [x] app/core/meta_api_errors.py
+      - TokenInvalidError(ValueError) for Meta codes 190, 102 (expired/invalid token); handle_meta_response raises it
+      - handle_meta_response(resp, context): parse Meta error JSON; raise TokenInvalidError(190/102) or ValueError; no tokens in messages
+  [x] docs/META_APP_REVIEW.md
+      - Permissions (pages_show_list, pages_read_engagement, pages_manage_posts) and use for App Review
+      - Token handling, user control, scope minimization
+  [x] app/services/facebook_oauth_service.py
+      - get_authorize_url(db, user_id) -> Facebook authorize URL; creates OAuthState
+      - exchange_code(db, code, state) -> validate state, exchange code for token; exchange short-lived for long-lived (~60d) when app credentials set; store encrypted; audit facebook.connected
+      - Single Meta App credentials from config; no user App ID/Secret
+  [x] app/services/facebook_pages_service.py
+      - sync_pages(db, user_id) -> fetch /me/accounts, upsert MetaPage with encrypted page tokens; audit meta.pages_synced
+      - list_pages(db, user_id) -> list user's pages (no token in response)
+      - post_to_page(db, meta_page_id, user_id, message) -> POST to Graph API /{page_id}/feed
+      - OAuth + sync + post_to_page: Meta API errors handled; on TokenInvalidError (190/102) clear user token, commit, re-raise for re-auth
+      - _clear_user_token(db, user_id) in facebook_pages_service; on TokenInvalidError clear token, commit, re-raise
+  [x] app/services/facebook_oauth_service.py: disconnect_facebook(db, user_id) -> delete MetaUserToken + MetaPages, audit facebook.disconnected
+  [x] app/api/routes/auth_facebook.py: POST /api/v1/auth/facebook/disconnect -> disconnect_facebook (requires current user)
+  [x] app/services/vce_service.py
+      - list_categories, get_rotated_category_for_today (by day of year)
+      - list_templates(category_id), get_suggested_template_for_today; render_template(template, hook, body, cta)
+  [x] app/services/recommendation_service.py
+      - get_posting_recommendations(db, meta_page_id, user_id) -> advisory time windows, category×time, safe_frequency_range
+      - MVP: static suggestions; all advisory only; user decides
+  [x] app/services/scheduler_service.py
+      - create_scheduled_post, list_scheduled_posts, get_scheduled_post, cancel_scheduled_post
+      - set_posting_preference, get_posting_preference (cooldown, max_posts_per_day per page)
+      - process_due_posts(db) -> find PENDING with scheduled_at <= now; enforce cooldown/max; post to FB; audit scheduled_post.posted / scheduled_post.failed
+  [x] app/api/routes/content.py list_content: pass user_id=current_user.id when not admin (filter by creator)
+  [x] app/api/routes/auth_facebook.py
+      - GET  /api/v1/auth/facebook/login     -> redirect to Facebook (requires get_current_user)
+      - GET  /api/v1/auth/facebook/callback  -> exchange code, redirect to /?facebook=connected (no secrets in response)
+      - POST /api/v1/auth/facebook/disconnect -> remove user token and pages; audit facebook.disconnected
+  [x] app/api/routes/meta_pages.py
+      - GET  /api/v1/meta/pages/                      -> list user's pages (no token in response)
+      - POST /api/v1/meta/pages/sync                  -> sync pages from Meta (/me/accounts), store encrypted
+      - GET  /api/v1/meta/pages/{id}/recommendations  -> advisory posting recommendations (time windows, category×time, frequency)
+  [x] app/api/routes/scheduled_posts.py
+      - POST   /api/v1/scheduled-posts/                    -> schedule post (content_id, meta_page_id, scheduled_at)
+      - GET    /api/v1/scheduled-posts/                     -> list (filters: status, meta_page_id)
+      - GET    /api/v1/scheduled-posts/preferences/{page_id} -> get posting preference
+      - PUT    /api/v1/scheduled-posts/preferences/{page_id} -> set cooldown, max_posts_per_day
+      - GET    /api/v1/scheduled-posts/{id}                 -> get by id
+      - PATCH  /api/v1/scheduled-posts/{id}/cancel         -> cancel PENDING
+  [x] app/api/routes/cron.py
+      - POST /api/v1/cron/run?secret=CRON_SECRET -> process due scheduled posts (server-side only)
+  [x] app/api/routes/vce.py
+      - GET /api/v1/vce/categories -> list categories
+      - GET /api/v1/vce/categories/today -> suggested category (rotation); advisory
+      - GET /api/v1/vce/templates -> list hook templates (optional category_id)
+      - GET /api/v1/vce/suggested-template -> suggested template for today; advisory
+      - GET /api/v1/vce/share-psychology-tips -> advisory tips (advisory_only, tips[])
+  [x] api_router: prefix /vce; scripts/init_db create_sample_data seeds VCE categories + templates if empty
+  [x] api_router: prefix /auth/facebook, /meta/pages, /scheduled-posts, /cron, /vce; app.models imported before init_db()
+
+--- 1.8 ARCHITECTURE COMPLIANCE (IMPLEMENTED) ---
+
+  [x] 4 services as per ARCHITECTURE.md:
+      - API Gateway (main.py, api/) - routing, auth, response
+      - Content Management (content_service.py) - CRUD + workflow
+      - Audit Logging (audit_service.py) - immutable audit trail
+      - User Management (users routes + direct DB for now)
+  [x] Content + Audit in single atomic transaction (content create/update/submit/approve/delete)
+  [x] State machine: DRAFT -> PENDING_APPROVAL -> APPROVED/REJECTED; only draft update/delete
+  [x] Admin-only: approve, list users, create user, audit logs
+  [x] OpenAPI: /docs, /redoc (FastAPI default)
+
+--- SUMMARY: IMPLEMENTED ---
+
+  Total API endpoints: 31 (7 content + 3 users + 2 audit + 3 auth/facebook + 3 meta/pages + 6 scheduled-posts + 1 cron + 4 vce + 2 system)
+  Total Python app files: ~40 (core, models, schemas, services, api, main)
+  Database: SQLite, SQLAlchemy; users, content, audit_logs, oauth_states, meta_user_tokens, meta_pages, scheduled_posts, posting_preferences, content_categories, hook_templates via init_db()
+  Auth: Simplified (user_id query param); JWT not implemented
+
+
+================================================================================
+PART 2: JO ABHI BAKI HAI (REMAINING) - COMPLETE LIST
+================================================================================
+  Roadmap: docs/ROADMAP_AND_PRODUCT.md
+  MVP = monolith; OAuth, page tokens, user-configurable posting, Meta compliance.
+  Post-MVP = Media/File service, microservices split.
+================================================================================
+
+--- 2.1 AUTHENTICATION (ARCHITECTURE - FUTURE) ---
+
+  [ ] JWT tokens - replace user_id query param
+  [ ] Password hashing - User model me abhi password field nahi; future: hash store
+  [ ] OAuth2 / external auth service (optional)
+
+--- 2.2 RATE LIMITING & ABUSE (ARCHITECTURE §10) ---
+
+  [ ] Rate limiting - not implemented (v1.0)
+  [ ] Per-user limits (e.g. content creation 100/hour)
+  [ ] Per-IP fallback for unauthenticated
+  [ ] Redis storage, token bucket / sliding window
+  [ ] HTTP 429 + Retry-After, X-RateLimit-* headers
+  [ ] Abuse: IP blocking, user suspension, violation logging
+
+--- 2.3 USER MANAGEMENT GAPS (ARCHITECTURE) ---
+
+  [ ] User operations par AuditService call (user create/update/delete) - "future" in doc
+  [ ] Soft delete for users (is_active); hard delete / GDPR flow not automated
+  [ ] Password field + hashing (currently User model me password nahi)
+
+--- 2.4 CONTENT LIST AUTHORIZATION ---
+
+  [x] list_content: filter by current user if not admin (user_id=current_user.id); admins see all
+
+--- 2.5 META-COMPLIANT SAAS MODEL (MVP - ROADMAP §1) ---
+
+  [x] Single Meta App (one App ID + Secret) for entire SaaS
+  [x] OAuth-based user consent only (no user App ID/Secret input)
+  [x] Page-level access tokens per user/page (MetaPage model, sync/list API)
+  [x] App Review scope minimization (docs/META_APP_REVIEW.md; minimal scopes documented)
+
+--- 2.6 TOKEN LIFECYCLE MANAGEMENT (MVP - ROADMAP §2) ---
+
+  [x] Short-lived -> long-lived user token exchange (in exchange_code; ~60 days when app credentials set)
+  [x] Page access token generation & secure storage (per user/page; encrypted at rest)
+  [x] Token encryption at rest (user and page tokens)
+  [x] Expiry handling; re-auth flow when token invalid/expired (TokenInvalidError 190/102; clear user token on failure; disconnect endpoint)
+  [x] Audit log for token/OAuth events (facebook.connected, facebook.disconnected, meta.pages_synced, scheduled_post.posted/failed)
+
+--- 2.7 MULTI-TENANCY (MVP - ROADMAP §3) ---
+
+  [x] Tenant = Account (MVP); User = Operator; User -> multiple pages mapping (MetaPage per user)
+  [x] Tenant isolation (pages, tokens by user_id; content filter by user when enforced)
+  [ ] Future: org/team support (post-MVP)
+
+--- 2.8 VIRAL CONTENT ENGINE - CORE MODULE (MVP - ROADMAP §4) ---
+
+  [x] Category rotation (ContentCategory; get_rotated_category_for_today by day of year; GET /vce/categories/today)
+  [x] Hook-based templates (HookTemplate: body_template with {hook}, {body}, {cta}; GET /vce/templates, /vce/suggested-template)
+  [x] Share-psychology logic (optional; GET /vce/share-psychology-tips returns advisory tips)
+  [x] Posting time intelligence (user-defined schedule per page; system suggests via recommendations + VCE; user decides)
+
+--- 2.9 FACEBOOK INTEGRATION (MVP - NEXT FOCUS) ---
+
+  [x] Facebook OAuth (single Meta App; user consent only)
+  [x] Page access token management, storage (sync from /me/accounts; refresh = re-sync)
+  [x] Post creation API (Graph API) - post_to_page in facebook_pages_service; scheduler uses it
+  [x] Error handling + rate limit for FB API (meta_api_errors; user-safe messages; 429/code 4,17)
+  [x] Meta review-ready compliance (scopes, docs) - META_APP_REVIEW.md, error handling
+
+--- 2.9a POSTING RECOMMENDATION ENGINE (MVP - ADVISORY ONLY) ---
+
+  [x] Suggest best time windows (advisory only) - GET .../meta/pages/{id}/recommendations
+  [x] Suggest category x time matching (e.g. motivation mornings, truth evenings) - advisory only
+  [x] Suggest safe frequency ranges per page - advisory only
+  [x] All suggestions advisory; final decision remains with the user (Meta-safe, digital marketing best practices)
+
+--- 2.10 AUTOMATION: USER-CONFIGURABLE POSTING (MVP - PHASE 3 DONE) ---
+
+  [x] System must NOT force posting frequency or time; platform provides data-driven recommendations only
+  [x] User-configurable posting preferences (per page) - cooldown_minutes, max_posts_per_day (safety limits)
+  [x] Scheduler as executor only when user enables/schedules a post (ScheduledPost; process_due_posts)
+  [x] System safety limits only: cooldowns (min interval), max caps (max posts/day per page)
+  [x] Posting Recommendation Engine integration (GET .../recommendations; user decides) - advisory only
+  [x] Cron/automation runs server-side only (POST /cron/run?secret=)
+  [x] Integration with approval workflow (only APPROVED content can be scheduled)
+  [x] Cron endpoint + secret key (CRON_SECRET); retry logic / exponential backoff optional later
+
+--- 2.11 AI & ADMIN (OPTIONAL MVP / POST-MVP) ---
+
+  [ ] AI content generation (OpenAI/Claude), templates, cost tracking
+  [ ] Admin panel / frontend dashboard, content UI, analytics
+
+--- 2.12 POST-MVP (DEFERRED - ROADMAP §5) ---
+
+  [ ] Media/File service - DEFERRED (no file upload/storage in MVP)
+  [ ] Microservices split - DEFERRED (monolith correct for MVP)
+  [ ] Hourly engagement automation - optional later
+  [ ] PostgreSQL, Redis, Celery when needed
+  [ ] Backup/retention automation (ARCHITECTURE §12) - when needed
+
+--- 2.13 TESTING ---
+
+  [x] Unit tests (pytest) - tests/ with conftest.py (in-memory SQLite, TestClient), test_health.py (/, /health), test_api.py (content 404, VCE categories, share-psychology-tips). Run: pytest tests/
+  [ ] Integration tests, E2E tests (optional later)
+  [x] Manual testing done; automated health + API tests in place
+
+--- 2.14 DOCUMENTATION ---
+
+  [x] ARCHITECTURE.md, PROJECT_STATUS_SUMMARY.md, ROADMAP_AND_PRODUCT.md, docs/README.md, etc. present
+  [ ] API usage guide / Postman collection (optional)
+  [ ] Deployment runbook (future)
+
+
+================================================================================
+QUICK REFERENCE TABLE
+================================================================================
+
+  Category                    | Implemented      | Remaining
+  ---------------------------|------------------|------------------------------------------
+  Core (config, DB)           | Yes              | -
+  Models (User, Content, Audit)| Yes             | -
+  Schemas                     | Yes              | -
+  ContentService + Audit      | Yes              | -
+  Content API (7)             | Yes              | list filter by user when not admin (done)
+  User API (3)                | Yes              | Audit on user ops; password/hashing
+  Audit API (2)               | Yes              | -
+  Exception handling          | Yes              | -
+  Auth                        | Simplified only  | JWT, OAuth, password hash
+  Rate limiting               | No               | When needed
+  Media/Files                 | No               | POST-MVP (deferred)
+  Backup/Retention            | No               | Policies + automation
+  Meta SaaS model             | Yes (partial)    | Single App, OAuth, page tokens done
+  Token lifecycle             | Yes (partial)   | User + page tokens encrypted; expiry/re-auth later
+  Multi-tenancy               | Yes (partial)   | Tenant=user; user->pages (MetaPage); content filter optional
+  Viral Content Engine        | Yes              | Category rotation, hook templates, GET /vce/share-psychology-tips (advisory)
+  Posting Recommendation Engine | Yes            | Advisory: GET .../recommendations (time windows, category×time, frequency)
+  Facebook integration        | Yes             | OAuth, page tokens, post API, Meta compliance, error handling
+  User-configurable posting   | Yes              | Phase 3: scheduled posts, preferences, cron/run
+  Microservices               | No               | POST-MVP (deferred)
+  AI / Admin UI               | No               | Optional
+  Automated tests             | Yes (pytest)     | tests/ (health, API); integration/E2E optional later
+
+
+================================================================================
+FILE-WISE IMPLEMENTED CHECKLIST (WHAT EXISTS IN CODEBASE)
+================================================================================
+
+  app/__init__.py
+  app/main.py
+  app/core/__init__.py
+  app/core/config.py
+  app/core/database.py
+  app/core/token_crypto.py
+  app/core/meta_api_errors.py
+  app/models/__init__.py
+  app/models/meta_oauth.py
+  app/models/user.py
+  app/models/content.py
+  app/models/audit_log.py
+  app/schemas/__init__.py
+  app/schemas/user.py
+  app/schemas/content.py
+  app/schemas/audit_log.py
+  app/services/__init__.py
+  app/services/audit_service.py
+  app/services/content_service.py
+  app/services/facebook_oauth_service.py
+  app/services/facebook_pages_service.py
+  app/services/recommendation_service.py
+  app/api/__init__.py
+  app/api/dependencies.py
+  app/api/routes/__init__.py
+  app/api/routes/content.py
+  app/api/routes/users.py
+  app/api/routes/audit_logs.py
+  app/api/routes/auth_facebook.py
+  app/api/routes/meta_pages.py
+  app/models/meta_page.py
+  app/models/scheduled_post.py
+  app/models/posting_preference.py
+  app/models/content_category.py
+  app/models/hook_template.py
+  app/schemas/meta_page.py
+  app/schemas/scheduled_post.py
+  app/schemas/vce.py
+  app/services/scheduler_service.py
+  app/services/vce_service.py
+  app/api/routes/scheduled_posts.py
+  app/api/routes/cron.py
+  app/api/routes/vce.py
+  requirements.txt
+  Dockerfile
+  docker-compose.yml
+  .env.example
+  .gitignore
+  scripts/init_db.py
+  tests/conftest.py
+  tests/test_health.py
+  tests/test_api.py
+  docs/* (multiple .md files; incl. META_APP_REVIEW.md)
+
+  Total: Core + Phases 1–8 (OAuth, page tokens, scheduler, Meta compliance, VCE, share-psychology, pytest). Next: optional integration/E2E, JWT.
+  Media/File and microservices = post-MVP.
+
+  Stack: Python/FastAPI only. Roadmap: docs/ROADMAP_AND_PRODUCT.md
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

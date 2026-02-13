@@ -2,12 +2,18 @@
 
 Enterprise-grade content automation platform with manual approval workflows and comprehensive audit logging.
 
+**Stack:** Python/FastAPI. Docs: [docs/README.md](docs/README.md) — ARCHITECTURE, PROJECT_STATUS_SUMMARY, ROADMAP_AND_PRODUCT, IMPLEMENTATION_AND_REMAINING_DETAIL, GIT_SYNC_GUIDE.
+
 ## Features
 
 - **Content Management**: Create, update, and manage content with approval workflows
 - **Approval Workflow**: Draft → Pending Approval → Approved/Rejected
 - **Audit Logging**: Complete audit trail of all system actions
 - **User Management**: Role-based access control (Admin/User)
+- **Facebook OAuth (Phase 1)**: Single Meta App, user consent only; token encryption at rest; login/callback
+- **Page tokens (Phase 2)**: Sync/list Facebook pages; page access tokens encrypted at rest
+- **User-configurable posting (Phase 3)**: Schedule approved content to a page; scheduler executes only when user schedules; safety limits (cooldown, max/day); cron/run with secret
+- **Meta compliance (Phase 4)**: App Review doc (docs/META_APP_REVIEW.md); FB API error handling; Posting Recommendation Engine (advisory API)
 - **RESTful API**: Clean FastAPI-based REST API
 
 ## Tech Stack
@@ -16,6 +22,7 @@ Enterprise-grade content automation platform with manual approval workflows and 
 - FastAPI
 - SQLAlchemy (ORM)
 - SQLite (database)
+- Cryptography (token encryption), httpx (OAuth)
 - Docker-ready
 
 ## Project Structure
@@ -23,13 +30,14 @@ Enterprise-grade content automation platform with manual approval workflows and 
 ```
 app/
 ├── api/              # API routes
-│   └── routes/       # Route handlers
+│   └── routes/       # Route handlers (content, users, audit_logs, auth_facebook)
 ├── core/             # Core configuration
-│   ├── config.py     # Settings
-│   └── database.py   # DB connection
-├── models/           # SQLAlchemy models
+│   ├── config.py     # Settings (incl. Meta OAuth env)
+│   ├── database.py   # DB connection
+│   └── token_crypto.py  # Token encryption at rest
+├── models/           # SQLAlchemy models (incl. meta_oauth)
 ├── schemas/          # Pydantic schemas
-├── services/         # Business logic
+├── services/         # Business logic (facebook_oauth, facebook_pages)
 └── main.py           # FastAPI app
 ```
 
@@ -51,6 +59,12 @@ app/
    - API: http://localhost:8000
    - Docs: http://localhost:8000/docs
    - ReDoc: http://localhost:8000/redoc
+
+4. **Run tests:**
+   ```bash
+   pytest tests/ -v
+   ```
+   Tests use in-memory SQLite (no `.db` file). Requires `httpx<0.28` (see requirements.txt).
 
 ### Docker
 
@@ -83,6 +97,34 @@ app/
 - `GET /api/v1/audit-logs/` - List audit logs (admin only)
 - `GET /api/v1/audit-logs/{id}` - Get audit log (admin only)
 
+### Auth (Facebook OAuth)
+- `GET /api/v1/auth/facebook/login` - Redirect to Facebook consent (requires `user_id` query for MVP)
+- `GET /api/v1/auth/facebook/callback` - OAuth callback; redirects to `/?facebook=connected`
+- `POST /api/v1/auth/facebook/disconnect` - Disconnect Facebook (remove token and pages; user must re-auth and sync)
+
+### Meta / Pages
+- `GET /api/v1/meta/pages/` - List connected Facebook pages (no tokens in response)
+- `POST /api/v1/meta/pages/sync` - Sync pages from Meta (/me/accounts); stores encrypted page tokens
+- `GET /api/v1/meta/pages/{id}/recommendations` - Advisory posting recommendations (time windows, category×time, frequency); user decides
+
+### Scheduled posts
+- `POST /api/v1/scheduled-posts/` - Schedule approved content to a page (content_id, meta_page_id, scheduled_at)
+- `GET /api/v1/scheduled-posts/` - List scheduled posts (filters: status, meta_page_id)
+- `GET /api/v1/scheduled-posts/{id}` - Get scheduled post
+- `PATCH /api/v1/scheduled-posts/{id}/cancel` - Cancel PENDING scheduled post
+- `GET /api/v1/scheduled-posts/preferences/{meta_page_id}` - Get posting preference (cooldown, max/day)
+- `PUT /api/v1/scheduled-posts/preferences/{meta_page_id}` - Set posting preference
+
+### Cron (server-side only)
+- `POST /api/v1/cron/run?secret=CRON_SECRET` - Process due scheduled posts; call from cron job
+
+### Viral Content Engine (VCE – advisory)
+- `GET /api/v1/vce/categories` - List content categories
+- `GET /api/v1/vce/categories/today` - Today's suggested category (rotation)
+- `GET /api/v1/vce/templates` - List hook templates (placeholders: {hook}, {body}, {cta})
+- `GET /api/v1/vce/suggested-template` - Suggested template for today (by category rotation)
+- `GET /api/v1/vce/share-psychology-tips` - Advisory share-psychology tips
+
 ## Content Workflow
 
 1. **Draft**: Content is created in draft status
@@ -93,12 +135,11 @@ Only draft content can be updated or deleted.
 
 ## Authentication
 
-**Note**: Currently uses a simplified user ID system. In production, implement:
-- JWT tokens
-- OAuth2
-- Session-based authentication
+**Current (MVP):**
+- **API:** Simplified `user_id` query parameter (defaults to 1). Placeholder for JWT/session later.
+- **Facebook OAuth (Phase 1):** Single Meta App; user consent only. Tokens encrypted at rest. No user App ID/Secret.
 
-To use the API, pass `user_id` as a query parameter (defaults to 1). This is a placeholder for proper authentication.
+To use the API, pass `user_id` as a query parameter. For Facebook login: `GET /api/v1/auth/facebook/login?user_id=1`.
 
 ## Environment Variables
 
@@ -107,32 +148,38 @@ Copy `.env.example` to `.env` and configure:
 - `DATABASE_URL`: Database connection string
 - `DEBUG`: Enable debug mode
 - `API_PREFIX`: API route prefix
+- **Facebook OAuth (optional):** `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `FACEBOOK_REDIRECT_URI`, `TOKEN_ENCRYPTION_KEY` (e.g. from `Fernet.generate_key().decode()`)
+- **Cron (optional):** `CRON_SECRET` — secret for `POST /api/v1/cron/run` (server-side only)
 
 ## Database
 
-SQLite database is created automatically on first run. The database file (`content_platform.db`) will be created in the project root.
+SQLite database is created automatically on first run. Tables: `users`, `content`, `audit_logs`, `oauth_states`, `meta_user_tokens`, `meta_pages`, `scheduled_posts`, `posting_preferences`. File: `content_platform.db` in project root.
 
 ## Project Status
 
-✅ **Complete and Verified** (December 2024)
+✅ **Core + Phases 1–4** (February 2025)
 
-- All 22 Python files implemented and verified
-- No linter or syntax errors
-- All functionality tested and working
-- Complete documentation
-
-For detailed verification results, see `docs/VERIFICATION_REPORT.md`
+- Core: content, approval, audit, users, API
+- Phase 1: Facebook OAuth (single Meta App; token encryption at rest)
+- Phase 2: Page tokens (sync/list pages; encrypted at rest)
+- Phase 3: Scheduled posts, posting preferences, post to Page (Graph API), cron/run
+- Phase 4: Meta App Review doc, FB API error handling, Posting Recommendation Engine (advisory)
+- Phase 5: Long-lived user token (~60d), audit for OAuth/pages/scheduled posts, list_content filter by user when not admin
+- Phase 6: Token expiry/re-auth (clear token on invalid/expired; POST /auth/facebook/disconnect)
+- Phase 7: Viral Content Engine — category rotation, hook templates (GET /vce/...); all advisory
+- Phase 8: Share-psychology (GET /vce/share-psychology-tips); pytest suite in `tests/` (run: `pytest tests/`)
+- See `docs/IMPLEMENTATION_AND_REMAINING_DETAIL.txt` and `docs/META_APP_REVIEW.md`
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
+See [docs/README.md](docs/README.md) for the full index. Core docs:
 
-- `ARCHITECTURE.md` - Complete architecture specification
-- `IMPLEMENTATION_PLAN.md` - Phase-wise implementation guide
-- `PROJECT_TRACKING.md` - Project progress and verification status
-- `VERIFICATION_REPORT.md` - Latest verification results
-- `QUICK_REFERENCE.md` - Quick architecture reference
-- `DATA_FLOW.md` - Detailed data flow diagrams
+- `docs/ARCHITECTURE.md` - Architecture specification
+- `docs/PROJECT_STATUS_SUMMARY.md` - Status and pending work
+- `docs/ROADMAP_AND_PRODUCT.md` - Roadmap, MVP, Meta, VCE
+- `docs/IMPLEMENTATION_AND_REMAINING_DETAIL.txt` - Implemented vs remaining (detail)
+- `docs/META_APP_REVIEW.md` - Meta App Review (permissions, token handling)
+- `docs/GIT_SYNC_GUIDE.md` - Git sync and ignore rules
 
 ## License
 
