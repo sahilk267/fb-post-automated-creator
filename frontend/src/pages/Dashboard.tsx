@@ -1,0 +1,74 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { listContent, type Content } from '../api/content';
+
+export default function Dashboard() {
+  const { userId } = useAuth();
+  const [content, setContent] = useState<Content[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (userId === null) return;
+    listContent(userId, { limit: 50 })
+      .then(setContent)
+      .catch(() => setContent([]))
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  const byStatus = content.reduce<Record<string, number>>((acc, c) => {
+    acc[c.status] = (acc[c.status] || 0) + 1;
+    return acc;
+  }, {});
+  const pending = byStatus['PENDING_APPROVAL'] ?? 0;
+  const approved = byStatus['APPROVED'] ?? 0;
+  const draft = byStatus['DRAFT'] ?? 0;
+
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-6">Dashboard</h1>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <p className="text-slate-500 text-sm font-medium">Drafts</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{draft}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <p className="text-slate-500 text-sm font-medium">Pending approval</p>
+          <p className="text-2xl font-bold text-amber-600 mt-1">{pending}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <p className="text-slate-500 text-sm font-medium">Approved</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{approved}</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-medium text-slate-800">Recent content</h2>
+        <Link to="/content/new" className="text-indigo-600 hover:underline font-medium text-sm">New content</Link>
+      </div>
+      {loading ? (
+        <p className="text-slate-500">Loading...</p>
+      ) : content.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+          No content yet. <Link to="/content/new" className="text-indigo-600 hover:underline">Create one</Link>.
+        </div>
+      ) : (
+        <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+          {content.slice(0, 10).map((c) => (
+            <li key={c.id}>
+              <Link to={`/content/${c.id}`} className="block px-4 py-3 hover:bg-slate-50 flex items-center justify-between">
+                <span className="font-medium text-slate-900">{c.title}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  c.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
+                  c.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-800' :
+                  'bg-slate-100 text-slate-600'
+                }`}>
+                  {c.status}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

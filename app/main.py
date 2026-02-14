@@ -1,9 +1,12 @@
 """FastAPI application entry point."""
 import logging
 import uuid
+from pathlib import Path
+
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
@@ -149,29 +152,33 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(api_router, prefix=settings.api_prefix)
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup."""
-    logger.info("Starting up application...")
-    try:
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}", exc_info=e)
-        raise
-
-
-@app.get("/")
-async def root():
-    """Root endpoint with API information."""
-    return {
-        "message": "Content Automation Platform API",
-        "version": settings.app_version,
-        "docs": "/docs"
-    }
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# Optional: serve frontend (when frontend/dist exists, e.g. after npm run build)
+_frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/assets", StaticFiles(directory=_frontend_dist / "assets"), name="assets")
+
+    @app.get("/")
+    @app.get("/{path:path}")
+    async def serve_spa(path: str = ""):
+        """Serve SPA index.html for non-API routes."""
+        if path.startswith("api") or path in ("docs", "redoc", "openapi.json", "health"):
+            raise HTTPException(status_code=404, detail="Not found")
+        index_file = _frontend_dist / "index.html"
+        if index_file.is_file():
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Not found")
+else:
+    @app.get("/")
+    async def root():
+        """Root endpoint with API information (when no frontend build)."""
+        return {
+            "message": "Content Automation Platform API",
+            "version": settings.app_version,
+            "docs": "/docs"
+        }

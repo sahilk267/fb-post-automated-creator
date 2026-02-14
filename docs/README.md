@@ -66,4 +66,4 @@ This is the single source of truth for what is implemented vs remaining. **Every
 
 ---
 
-**Last Updated:** February 2025. Phases 1–8 complete (OAuth, page tokens, scheduler, Meta compliance, VCE, share-psychology, pytest); tracking in IMPLEMENTATION_AND_REMAINING_DETAIL.txt.
+**Last Updated:** February 2025. Phases 1–8 complete; **UI** (React: Dashboard, Content, Admin) in `frontend/`; tracking in IMPLEMENTATION_AND_REMAINING_DETAIL.txt.

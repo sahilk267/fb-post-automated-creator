@@ -11,6 +11,9 @@
 ✅ app/                  # Python/FastAPI application
    ├── api/, core/, models/, schemas/, services/
    └── main.py
+✅ frontend/             # React (Vite + TypeScript + Tailwind) UI
+   └── (do not sync frontend/dist — build output)
+✅ tests/                # Pytest suite
 ✅ requirements.txt
 ✅ Dockerfile
 ✅ docker-compose.yml
@@ -55,10 +58,12 @@ python -m venv .venv
 .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 cp .env.example .env     # then edit .env
+# Optional: run UI locally — cd frontend && npm install && npm run dev
+# Docker image builds frontend and serves UI at / (see Dockerfile multi-stage build)
 
 # Daily
 git status
-git add app/ docs/ requirements.txt Dockerfile docker-compose.yml scripts/ .gitignore README.md
+git add app/ frontend/ tests/ docs/ requirements.txt Dockerfile docker-compose.yml scripts/ .gitignore README.md
 git commit -m "Your message"
 git push
 ```

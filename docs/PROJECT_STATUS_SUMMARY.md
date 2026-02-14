@@ -13,9 +13,9 @@
 **Status:** 100% Complete and Verified
 
 #### Code Statistics
-- **Total Files:** ~36 Python files
-- **Total Endpoints:** 26 API endpoints
-- **Documentation Files:** 12 files
+- **Total Files:** 40+ Python files (app/ + tests/)
+- **Total Endpoints:** 32 API endpoints
+- **Documentation Files:** 7 in docs/ (+ README, .env.example)
 - **Code Quality:** ✅ No linter errors
 - **Test Status:** ✅ Pytest suite (tests/): health + API; run: `pytest tests/`
 
@@ -26,8 +26,8 @@
 4. ✅ User Management (Role-based access)
 5. ✅ RESTful API (FastAPI)
 6. ✅ Error Handling (Global exception handlers)
-7. ✅ Database (SQLite with SQLAlchemy; 8 tables)
-8. ✅ Docker Support (Dockerfile + docker-compose.yml)
+7. ✅ Database (SQLite with SQLAlchemy; 10 tables: users, content, audit_logs, oauth_states, meta_user_tokens, meta_pages, scheduled_posts, posting_preferences, content_categories, hook_templates)
+8. ✅ Docker Support (Dockerfile + docker-compose.yml); image includes built frontend (multi-stage build)
 9. ✅ **Phase 1: Facebook OAuth** — Single Meta App, user consent only; token encryption at rest; `/auth/facebook/login`, `/auth/facebook/callback`
 10. ✅ **Phase 2: Page tokens** — MetaPage model; sync from `/me/accounts`; list/sync API; tokens encrypted at rest
 11. ✅ **Phase 3: User-configurable posting** — ScheduledPost, PostingPreference; post to Page (Graph API); scheduler executes only user-scheduled posts; cron/run + CRON_SECRET
@@ -44,7 +44,8 @@
 ✅ Validation Layer:        7 files (incl. vce)
 ✅ Business Logic:          7 files (incl. vce_service, recommendation_service)
 ✅ API Layer:              10 files (incl. vce)
-✅ Application Entry:       1 file
+✅ Application Entry:       1 file (main.py serves SPA when frontend/dist exists)
+✅ Frontend (UI):          React app in frontend/ (Vite, TypeScript, Tailwind, React Router)
 ✅ Tests:                   3 files (conftest, test_health, test_api)
 ✅ Deployment Files:        3 files
 ```
@@ -95,7 +96,8 @@
 - [ ] Cost tracking when used
 
 #### 7. Admin / Dashboard (optional for MVP)
-- [ ] Content management UI; basic analytics
+- [x] Content management UI (React/Vite/Tailwind): Dashboard, Content list/create/edit/detail, submit/approve/reject, Audit logs, Users list; MVP auth via user_id
+- [x] Basic analytics (dashboard counts: drafts, pending, approved)
 
 ### Post-MVP (deferred)
 
@@ -116,6 +118,8 @@ See [GIT_SYNC_GUIDE.md](./GIT_SYNC_GUIDE.md) for full detail. Summary:
 
 ### ✅ Sync with Git
 - `app/` — Python/FastAPI source
+- `frontend/` — React UI (Vite + TypeScript + Tailwind); build output `frontend/dist` not synced
+- `tests/` — Pytest suite (conftest, test_health, test_api)
 - `requirements.txt`, `Dockerfile`, `docker-compose.yml`
 - `scripts/`, `docs/`, `.env.example`, `.gitignore`, `README.md`
 

@@ -143,8 +143,8 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
       - cryptography>=41.0.0, httpx>=0.25.0,<0.28.0 (TestClient compat), pytest>=7.4.0
 
   [x] Dockerfile
-      - python:3.11-slim, WORKDIR /app, COPY requirements + app, EXPOSE 8000
-      - CMD uvicorn app.main:app --host 0.0.0.0 --port 8000
+      - Multi-stage: node:22-alpine builds frontend (npm install, npm run build); python:3.11-slim copies app + frontend/dist
+      - CMD uvicorn app.main:app --host 0.0.0.0 --port 8000; app serves SPA at / when frontend/dist present
 
   [x] docker-compose.yml (assumed present for Docker runs)
 
@@ -323,7 +323,10 @@ PART 2: JO ABHI BAKI HAI (REMAINING) - COMPLETE LIST
 --- 2.11 AI & ADMIN (OPTIONAL MVP / POST-MVP) ---
 
   [ ] AI content generation (OpenAI/Claude), templates, cost tracking
-  [ ] Admin panel / frontend dashboard, content UI, analytics
+  [x] Admin panel / frontend dashboard: React (Vite + TypeScript + Tailwind) in frontend/
+      - Login (user_id MVP), Dashboard (counts: draft/pending/approved), Content list/create/edit/detail
+      - Submit for approval, Approve/Reject (admin), Delete draft; Audit logs list, Users list (admin)
+      - main.py serves SPA from frontend/dist when present; Vite proxy in dev
 
 --- 2.12 POST-MVP (DEFERRED - ROADMAP §5) ---
 
@@ -372,7 +375,7 @@ QUICK REFERENCE TABLE
   Facebook integration        | Yes             | OAuth, page tokens, post API, Meta compliance, error handling
   User-configurable posting   | Yes              | Phase 3: scheduled posts, preferences, cron/run
   Microservices               | No               | POST-MVP (deferred)
-  AI / Admin UI               | No               | Optional
+  AI / Admin UI               | Yes (UI only)    | Content + Admin UI (React); AI generation optional
   Automated tests             | Yes (pytest)     | tests/ (health, API); integration/E2E optional later
 
 
@@ -423,6 +426,7 @@ FILE-WISE IMPLEMENTED CHECKLIST (WHAT EXISTS IN CODEBASE)
   app/api/routes/scheduled_posts.py
   app/api/routes/cron.py
   app/api/routes/vce.py
+  frontend/ (React: Vite, TypeScript, Tailwind, React Router; src/api, src/context, src/pages, src/components)
   requirements.txt
   Dockerfile
   docker-compose.yml

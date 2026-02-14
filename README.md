@@ -50,17 +50,24 @@ app/
    pip install -r requirements.txt
    ```
 
-2. **Run the application:**
+2. **Run the API:**
    ```bash
    uvicorn app.main:app --reload
    ```
 
-3. **Access the API:**
+3. **Run the UI (optional):**
+   ```bash
+   cd frontend && npm install && npm run dev
+   ```
+   - UI: http://localhost:5173 (proxies API to http://localhost:8000)
+   - Sign in with **User ID** (e.g. `1` for admin). Seed DB first: `python scripts/init_db.py`
+
+4. **Access the API directly:**
    - API: http://localhost:8000
    - Docs: http://localhost:8000/docs
    - ReDoc: http://localhost:8000/redoc
 
-4. **Run tests:**
+5. **Run tests:**
    ```bash
    pytest tests/ -v
    ```
@@ -68,14 +75,16 @@ app/
 
 ### Docker
 
-1. **Build and run:**
+1. **Build and run (image includes API + built frontend):**
    ```bash
    docker-compose up --build
    ```
+   The Dockerfile uses a multi-stage build: Node builds the frontend, then the Python image copies `frontend/dist` so the app serves the UI at `/`.
 
-2. **Access the API:**
-   - API: http://localhost:8000
-   - Docs: http://localhost:8000/docs
+2. **Access the app:**
+   - **UI:** http://localhost:8000 (sign in with User ID; seed DB first or run `python scripts/init_db.py` in a one-off container)
+   - **API:** http://localhost:8000/api/v1
+   - **Docs:** http://localhost:8000/docs
 
 ## API Endpoints
 
@@ -168,6 +177,7 @@ SQLite database is created automatically on first run. Tables: `users`, `content
 - Phase 6: Token expiry/re-auth (clear token on invalid/expired; POST /auth/facebook/disconnect)
 - Phase 7: Viral Content Engine — category rotation, hook templates (GET /vce/...); all advisory
 - Phase 8: Share-psychology (GET /vce/share-psychology-tips); pytest suite in `tests/` (run: `pytest tests/`)
+- **UI:** React app in `frontend/` (Vite, TypeScript, Tailwind): Dashboard, Content CRUD, submit/approve/reject, Audit logs, Users (admin). Run: `cd frontend && npm run dev`. When `frontend/dist` exists, FastAPI serves the SPA at `/`.
 - See `docs/IMPLEMENTATION_AND_REMAINING_DETAIL.txt` and `docs/META_APP_REVIEW.md`
 
 ## Documentation
