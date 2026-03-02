@@ -23,7 +23,13 @@ class Settings(BaseSettings):
     facebook_redirect_uri: Optional[str] = None
     token_encryption_key: Optional[str] = None  # For encrypting tokens at rest (e.g. 32-byte base64)
     cron_secret: Optional[str] = None  # Secret for cron/run endpoint (server-side only)
-    
+
+    # Gemini API (optional) – for AI-generated content themes
+    gemini_api_key: Optional[str] = None  # Get from https://aistudio.google.com/apikey
+
+    # Celery (optional) – background task queue for scheduled Facebook posts
+    celery_broker_url: str = "redis://localhost:6379/0"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

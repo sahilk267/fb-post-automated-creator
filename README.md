@@ -79,12 +79,21 @@ app/
    ```bash
    docker-compose up --build
    ```
-   The Dockerfile uses a multi-stage build: Node builds the frontend, then the Python image copies `frontend/dist` so the app serves the UI at `/`.
+   The Dockerfile uses a multi-stage build: Node builds the frontend, then the Python image copies `frontend/dist` and runs `python -m scripts.init_db` (tables + seed) before starting the API. The app serves the UI at `/`.
 
-2. **Access the app:**
-   - **UI:** http://localhost:8000 (sign in with User ID; seed DB first or run `python scripts/init_db.py` in a one-off container)
+2. **Restart with Docker** (after code or env changes):
+   ```bash
+   docker-compose down
+   docker-compose up --build
+   ```
+   This rebuilds the image (including frontend) and recreates the container. Ensure `.env` has `GEMINI_API_KEY` (optional) and `DATABASE_URL` is unchanged if you keep `./data` for the DB.
+
+3. **Access the app:**
+   - **UI:** http://localhost:8000 (sign in with User ID; seed creates admin + user1)
    - **API:** http://localhost:8000/api/v1
    - **Docs:** http://localhost:8000/docs
+
+4. **Optional env:** Set `GEMINI_API_KEY` in `.env` for AI theme generation on the "New content" page (category → themes). Set Facebook OAuth vars for login/sync/publish.
 
 ## API Endpoints
 
@@ -95,6 +104,7 @@ app/
 - `PATCH /api/v1/content/{id}` - Update content (draft only)
 - `POST /api/v1/content/{id}/submit` - Submit for approval
 - `POST /api/v1/content/{id}/approve` - Approve/reject (admin only)
+- `POST /api/v1/content/{id}/publish-to-facebook` - Publish content to a Facebook Page (body: `meta_page_id`); sets `fb_page_id`, `fb_post_id`, `fb_status`
 - `DELETE /api/v1/content/{id}` - Delete content (draft only)
 
 ### Users
@@ -132,6 +142,7 @@ app/
 - `GET /api/v1/vce/categories/today` - Today's suggested category (rotation)
 - `GET /api/v1/vce/templates` - List hook templates (placeholders: {hook}, {body}, {cta})
 - `GET /api/v1/vce/suggested-template` - Suggested template for today (by category rotation)
+- `GET /api/v1/vce/generate-themes` - Generate content themes via Gemini (query: `category_id`, `category_name`, `count`; requires `GEMINI_API_KEY`)
 - `GET /api/v1/vce/share-psychology-tips` - Advisory share-psychology tips
 
 ## Content Workflow
@@ -159,10 +170,20 @@ Copy `.env.example` to `.env` and configure:
 - `API_PREFIX`: API route prefix
 - **Facebook OAuth (optional):** `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `FACEBOOK_REDIRECT_URI`, `TOKEN_ENCRYPTION_KEY` (e.g. from `Fernet.generate_key().decode()`)
 - **Cron (optional):** `CRON_SECRET` — secret for `POST /api/v1/cron/run` (server-side only)
+- **Gemini (optional):** `GEMINI_API_KEY` — for AI theme generation on New content (GET /vce/generate-themes)
+- **Celery (optional):** `CELERY_BROKER_URL` — Redis URL for scheduled Facebook posts (default `redis://localhost:6379/0`). Run Redis and: `celery -A app.scheduler worker -l info`
+
+## Running the scheduler (Celery + Redis)
+
+To run scheduled Facebook posts at the chosen time:
+
+1. Start Redis: `redis-server`
+2. Start the Celery worker: `celery -A app.scheduler worker -l info`
+3. Create content with "Schedule for" + page on the New content form (or use POST /api/v1/scheduled-posts/). When content is approved, the task runs at the scheduled time.
 
 ## Database
 
-SQLite database is created automatically on first run. Tables: `users`, `content`, `audit_logs`, `oauth_states`, `meta_user_tokens`, `meta_pages`, `scheduled_posts`, `posting_preferences`. File: `content_platform.db` in project root.
+SQLite database is created automatically on first run (or by `python -m scripts.init_db` in Docker). Tables: `users`, `content`, `audit_logs`, `oauth_states`, `meta_user_tokens`, `meta_pages`, `scheduled_posts`, `posting_preferences`, `content_categories`, `hook_templates`. Content has optional Facebook fields: `fb_page_id`, `fb_post_id`, `fb_status`; and optional schedule intent: `schedule_at`, `schedule_meta_page_id` (used when content is approved to create a Celery scheduled post). With Docker, DB path is `/app/data/content_platform.db` (host `./data`). For an existing DB, add new columns if needed (see docs) or remove `./data` and restart to recreate.
 
 ## Project Status
 
@@ -177,7 +198,9 @@ SQLite database is created automatically on first run. Tables: `users`, `content
 - Phase 6: Token expiry/re-auth (clear token on invalid/expired; POST /auth/facebook/disconnect)
 - Phase 7: Viral Content Engine — category rotation, hook templates (GET /vce/...); all advisory
 - Phase 8: Share-psychology (GET /vce/share-psychology-tips); pytest suite in `tests/` (run: `pytest tests/`)
-- **UI:** React app in `frontend/` (Vite, TypeScript, Tailwind): Dashboard, Content CRUD, submit/approve/reject, Audit logs, Users (admin). Run: `cd frontend && npm run dev`. When `frontend/dist` exists, FastAPI serves the SPA at `/`.
+- **UI:** React app in `frontend/` (Vite, TypeScript, Tailwind): Dashboard, Content CRUD, submit/approve/reject, **Publish to Facebook** (content detail: select page, publish), **New content with AI** (category → generate themes → load into form), Audit logs, Users (admin). Run: `cd frontend && npm run dev`. When `frontend/dist` exists, FastAPI serves the SPA at `/`.
+- **Facebook Graph:** `app/services/fb_api.py` — `publish_to_facebook()`; rate limit and invalid-token handling. Content model: `fb_page_id`, `fb_post_id`, `fb_status`.
+- **VCE + Gemini:** GET `/vce/generate-themes`; theme generation service uses `GEMINI_API_KEY`.
 - See `docs/IMPLEMENTATION_AND_REMAINING_DETAIL.txt` and `docs/META_APP_REVIEW.md`
 
 ## Documentation

@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+---
+
+This project is a Meta-compliant SaaS platform.
+
+- Use a single Meta App (one App ID + Secret) for the entire SaaS.
+- Never request or accept user App ID or App Secret.
+- All Facebook/Instagram access must be via OAuth user consent.
+- Posting is user-controlled; the system must NOT force frequency or time. Platform provides data-driven recommendations only (Posting Recommendation Engine is advisory; final decision remains with the user).
+- Scheduler acts as executor only when the user enables or schedules a post; it does not decide on its own.
+- Align with Meta platform safety and digital marketing best practices (e.g. Buffer/Hootsuite model).

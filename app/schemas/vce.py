@@ -40,3 +40,9 @@ class SuggestedTemplateResponse(BaseModel):
     template: HookTemplateResponse
     suggested_category: Optional[ContentCategoryResponse] = None
     advisory_only: bool = True
+
+
+class GenerateThemesResponse(BaseModel):
+    """AI-generated content themes (Gemini). Advisory only."""
+    themes: list[str]
+    available: bool = True  # False if Gemini API key not configured

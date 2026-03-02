@@ -1,4 +1,4 @@
-"""Viral Content Engine API: category rotation, hook templates. All advisory; user decides."""
+"""Viral Content Engine API: category rotation, hook templates, AI theme generation. All advisory; user decides."""
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -10,6 +10,7 @@ from app.schemas.vce import (
     HookTemplateResponse,
     SuggestedCategoryResponse,
     SuggestedTemplateResponse,
+    GenerateThemesResponse,
 )
 from app.services.vce_service import (
     list_categories,
@@ -17,6 +18,10 @@ from app.services.vce_service import (
     list_templates,
     get_suggested_template_for_today,
     get_share_psychology_tips,
+)
+from app.services.theme_generation_service import (
+    generate_themes,
+    is_theme_generation_available,
 )
 
 router = APIRouter()
@@ -65,3 +70,25 @@ def get_suggested_template(db: Session = Depends(get_db)):
 def share_psychology_tips():
     """Get advisory share-psychology tips (emotion, utility, clarity, timing, CTA). All advisory; user decides."""
     return {"advisory_only": True, "tips": get_share_psychology_tips()}
+
+
+@router.get("/generate-themes", response_model=GenerateThemesResponse)
+def get_generated_themes(
+    category_id: Optional[int] = Query(None, description="Filter themes by category ID"),
+    category_name: Optional[str] = Query(None, description="Category name for context (e.g. Motivation)"),
+    count: int = Query(5, ge=1, le=15, description="Number of themes to generate"),
+    extra_instruction: Optional[str] = Query(None, description="Optional extra context for the AI"),
+    db: Session = Depends(get_db),
+):
+    """Generate content themes using Gemini API. Requires GEMINI_API_KEY. Advisory only."""
+    available = is_theme_generation_available()
+    if not available:
+        return GenerateThemesResponse(themes=[], available=False)
+    themes = generate_themes(
+        db,
+        category_id=category_id,
+        category_name=category_name,
+        count=count,
+        extra_instruction=extra_instruction,
+    )
+    return GenerateThemesResponse(themes=themes, available=True)

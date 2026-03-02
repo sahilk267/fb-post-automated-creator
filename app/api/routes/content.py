@@ -1,5 +1,5 @@
 """Content API routes."""
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -11,9 +11,11 @@ from app.schemas.content import (
     ContentCreate,
     ContentUpdate,
     ContentResponse,
-    ContentApprovalRequest
+    ContentApprovalRequest,
+    PublishToFacebookRequest,
 )
 from app.services.content_service import ContentService
+from app.services.fb_api import publish_to_facebook
 
 router = APIRouter()
 
@@ -50,8 +52,12 @@ def list_content(
     content_status = None
     if status_filter:
         try:
-            content_status = ContentStatus(status_filter)
-        except ValueError:
+            # Accept enum value (e.g. "approved") or name (e.g. "APPROVED")
+            try:
+                content_status = ContentStatus(status_filter)
+            except ValueError:
+                content_status = ContentStatus[status_filter.upper()]
+        except (ValueError, KeyError):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid status: {status_filter}"
@@ -159,6 +165,24 @@ def approve_content(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+
+
+@router.post("/{content_id}/publish-to-facebook", response_model=ContentResponse)
+def publish_content_to_facebook(
+    content_id: int,
+    body: PublishToFacebookRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Publish content to a Facebook Page. Updates content with fb_page_id, fb_post_id, fb_status."""
+    try:
+        content = publish_to_facebook(db, content_id, body.meta_page_id, current_user.id)
+        return content
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
 
 

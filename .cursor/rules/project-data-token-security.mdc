@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+- OAuth tokens (user and page access tokens) are sensitive: store securely and encrypt at rest.
+- No secrets, tokens, or credentials in code, logs, or API responses. Use environment variables for sensitive config (e.g. Meta App ID/Secret, encryption keys).
+- Apply least-privilege access and Meta policy compliance. Flag potential security or compliance risks.

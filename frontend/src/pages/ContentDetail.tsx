@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getContent, submitForApproval, approveContent, deleteContent, type Content } from '../api/content';
+import { getContent, submitForApproval, approveContent, deleteContent, publishToFacebook, type Content } from '../api/content';
+import { listPages, type MetaPage } from '../api/metaPages';
 
 export default function ContentDetail() {
   const { userId } = useAuth();
@@ -11,11 +12,19 @@ export default function ContentDetail() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [approveComment, setApproveComment] = useState('');
+  const [pages, setPages] = useState<MetaPage[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState<number | ''>('');
+  const [publishLoading, setPublishLoading] = useState(false);
 
   useEffect(() => {
     if (userId === null || !id) return;
     getContent(userId, parseInt(id, 10)).then(setContent).catch(() => setError('Content not found'));
   }, [userId, id]);
+
+  useEffect(() => {
+    if (userId === null) return;
+    listPages(userId).then(setPages).catch(() => setPages([]));
+  }, [userId]);
 
   async function handleSubmit() {
     if (userId === null || !id || !content) return;
@@ -60,6 +69,20 @@ export default function ContentDetail() {
     }
   }
 
+  async function handlePublishToFacebook() {
+    if (userId === null || !id || !content || selectedPageId === '') return;
+    setPublishLoading(true);
+    setError('');
+    try {
+      const updated = await publishToFacebook(userId, parseInt(id, 10), selectedPageId);
+      setContent(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to publish to Facebook');
+    } finally {
+      setPublishLoading(false);
+    }
+  }
+
   if (error && !content) {
     return (
       <div>
@@ -70,13 +93,13 @@ export default function ContentDetail() {
   }
   if (!content) return <p className="text-slate-500">Loading...</p>;
 
-  const canEdit = content.status === 'DRAFT';
-  const canSubmit = content.status === 'DRAFT';
-  const canApprove = content.status === 'PENDING_APPROVAL';
+  const canEdit = content.status === 'draft';
+  const canSubmit = content.status === 'draft';
+  const canApprove = content.status === 'pending_approval';
   const statusClass =
-    content.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-    content.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-800' :
-    content.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600';
+    content.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+      content.status === 'pending_approval' ? 'bg-amber-100 text-amber-800' :
+        content.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600';
 
   return (
     <div>
@@ -90,6 +113,8 @@ export default function ContentDetail() {
         <p className="text-slate-400 text-sm mt-4">
           Created {new Date(content.created_at).toLocaleString()}
           {content.approved_at && ' · Approved ' + new Date(content.approved_at).toLocaleString()}
+          {content.fb_status === 'posted' && content.fb_post_id && ' · Published to Facebook'}
+          {content.fb_status === 'failed' && ' · Facebook publish failed'}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -113,6 +138,41 @@ export default function ContentDetail() {
             <input type="text" placeholder="Comment (optional)" value={approveComment} onChange={(e) => setApproveComment(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <button type="button" onClick={() => handleApprove(true)} disabled={loading} className="rounded-lg bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Approve</button>
             <button type="button" onClick={() => handleApprove(false)} disabled={loading} className="rounded-lg bg-red-600 text-white px-4 py-2 hover:bg-red-700 disabled:opacity-50">Reject</button>
+          </>
+        )}
+      </div>
+      <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-200">
+        <h2 className="text-sm font-semibold text-slate-800 mb-2">Publish to Facebook</h2>
+        {content.status !== 'approved' ? (
+          <p className="text-slate-500 text-sm">Content must be <strong>Approved</strong> before it can be published.</p>
+        ) : (
+          <>
+            <p className="text-slate-600 text-sm mb-2">Choose a Page and publish this content. Connect Facebook and sync pages first from <Link to="/meta-pages" className="text-indigo-600 hover:underline">Facebook Pages</Link>.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedPageId}
+                onChange={(e) => setSelectedPageId(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm min-w-[200px]"
+              >
+                <option value="">Select a page...</option>
+                {pages.map((p) => (
+                  <option key={p.id} value={p.id}>{p.page_name || p.page_id}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handlePublishToFacebook}
+                disabled={publishLoading || selectedPageId === '' || pages.length === 0}
+                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {publishLoading ? 'Publishing...' : 'Publish to Facebook'}
+              </button>
+            </div>
+            {pages.length === 0 && (
+              <p className="text-amber-700 text-sm mt-1">
+                No pages. <Link to="/meta-pages" className="font-medium underline hover:no-underline">Connect Facebook and sync pages</Link> first.
+              </p>
+            )}
           </>
         )}
       </div>

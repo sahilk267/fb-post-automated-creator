@@ -1,4 +1,5 @@
 """Initialize database with sample data."""
+import app.models  # noqa: F401 - register all model tables before init_db()
 from app.core.database import init_db, SessionLocal
 from app.models.user import User
 from app.models.content import Content, ContentStatus
@@ -7,10 +8,13 @@ from app.models.hook_template import HookTemplate
 
 
 def create_sample_data():
-    """Create sample users and content."""
+    """Create sample users and content. Idempotent: skips if users already exist."""
     db = SessionLocal()
     
     try:
+        if db.query(User).first() is not None:
+            print("Users already exist, skipping sample data.")
+            return
         # Create admin user
         admin = User(
             username="admin",

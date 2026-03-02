@@ -2,7 +2,7 @@
 
 **Last Updated:** February 2025  
 **Stack:** Python/FastAPI. **Roadmap:** [ROADMAP_AND_PRODUCT.md](./ROADMAP_AND_PRODUCT.md) — Meta SaaS, tokens, multi-tenancy, Viral Content Engine, MVP scope.  
-**Current Status:** ✅ Core + Phases 1–8 complete. **Next:** optional (integration tests, JWT).
+**Current Status:** ✅ Core + Phases 1–8 complete; **Facebook Graph publish** (fb_api, Content fb_*); **AI theme generation** (Gemini, VCE generate-themes). **Next:** optional (integration tests, JWT).
 
 ---
 
@@ -13,8 +13,8 @@
 **Status:** 100% Complete and Verified
 
 #### Code Statistics
-- **Total Files:** 40+ Python files (app/ + tests/)
-- **Total Endpoints:** 32 API endpoints
+- **Total Files:** 42+ Python files (app/ + tests/; incl. fb_api, theme_generation_service)
+- **Total Endpoints:** 34 API endpoints (incl. publish-to-facebook, vce/generate-themes)
 - **Documentation Files:** 7 in docs/ (+ README, .env.example)
 - **Code Quality:** ✅ No linter errors
 - **Test Status:** ✅ Pytest suite (tests/): health + API; run: `pytest tests/`
@@ -36,6 +36,8 @@
 14. ✅ **Phase 6: Expiry/re-auth** — TokenInvalidError (190/102); clear user token on invalid/expired; POST /auth/facebook/disconnect; audit facebook.disconnected
 15. ✅ **Phase 7: Viral Content Engine** — ContentCategory, HookTemplate; category rotation (today); hook templates; GET /vce/categories, /vce/categories/today, /vce/templates, /vce/suggested-template (all advisory)
 16. ✅ **Phase 8: Share-psychology + tests** — GET /vce/share-psychology-tips (advisory); pytest in tests/ (conftest, test_health, test_api); in-memory SQLite for tests
+17. ✅ **Facebook Graph publish** — app/services/fb_api.py: publish_to_facebook(); Content model: fb_page_id, fb_post_id, fb_status (scheduled/posted/failed); POST /content/{id}/publish-to-facebook; rate limit & invalid-token handling; "Publish to Facebook" on content detail (UI)
+18. ✅ **AI theme generation (Gemini)** — app/core/config: gemini_api_key; app/services/theme_generation_service; GET /vce/generate-themes (category_id/category_name, count); New content UI: category → auto themes → load theme into form
 
 #### File Breakdown
 ```
@@ -92,7 +94,7 @@
 ### Important (MVP or early post-MVP)
 
 #### 6. AI Content Generation (optional for MVP)
-- [ ] Content templates; optional OpenAI/Claude
+- [x] **Gemini theme generation** — GET /vce/generate-themes; category → themes; New content: select category, themes auto-generate, click theme to load into form (GEMINI_API_KEY in .env)
 - [ ] Cost tracking when used
 
 #### 7. Admin / Dashboard (optional for MVP)
@@ -160,16 +162,16 @@ See [GIT_SYNC_GUIDE.md](./GIT_SYNC_GUIDE.md) for full detail. Summary:
 
 ### Key Endpoints (Current)
 ```
-Content:          7 endpoints
+Content:          8 endpoints (incl. POST .../publish-to-facebook)
 Users:            3 endpoints
 Audit Logs:       2 endpoints
 Auth/Facebook:    3 endpoints (login, callback, disconnect)
 Meta/Pages:       3 endpoints (list, sync, recommendations)
 Scheduled posts:  6 endpoints (create, list, get, cancel, preferences get/put)
 Cron:             1 endpoint (POST /cron/run?secret=)
-VCE:              5 endpoints (categories, categories/today, templates, suggested-template, share-psychology-tips)
+VCE:              6 endpoints (categories, categories/today, templates, suggested-template, generate-themes, share-psychology-tips)
 System:           2 endpoints
-Total:            32 endpoints
+Total:            34 endpoints
 ```
 
 ---

@@ -9,7 +9,8 @@ from app.core.database import Base
 
 class ScheduledPostStatus(str, enum.Enum):
     """Status of a scheduled post."""
-    PENDING = "pending"
+    PENDING = "pending"       # Scheduled (waiting for publish time)
+    PROCESSING = "processing" # Celery task is running
     POSTED = "posted"
     CANCELLED = "cancelled"
     FAILED = "failed"

@@ -25,7 +25,9 @@ class ContentService:
             title=content_data.title,
             body=content_data.body,
             status=ContentStatus.DRAFT,
-            created_by_id=user_id
+            created_by_id=user_id,
+            schedule_at=getattr(content_data, "schedule_at", None),
+            schedule_meta_page_id=getattr(content_data, "schedule_meta_page_id", None),
         )
         self.db.add(content)
         # Flush to get content.id for audit log
@@ -172,6 +174,17 @@ class ContentService:
         # Single commit for both approval/rejection and audit log (atomic transaction)
         self.db.commit()
         self.db.refresh(content)
+
+        # If approved and schedule intent was set, create ScheduledPost and enqueue Celery task (lazy import to avoid circular import)
+        if approval_data.approved and content.schedule_at and content.schedule_meta_page_id:
+            from app.scheduler import schedule_facebook_post
+            schedule_facebook_post(
+                self.db,
+                content_id=content.id,
+                meta_page_id=content.schedule_meta_page_id,
+                publish_time=content.schedule_at,
+                user_id=content.created_by_id,
+            )
         
         return content
     

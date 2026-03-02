@@ -35,6 +35,7 @@
 ```
 ❌ .env                  # Secrets
 ❌ *.db, *.sqlite        # Database files
+❌ data/                 # Docker DB volume (content_platform.db); do not sync
 ❌ __pycache__/          # Python cache
 ❌ .venv/, venv/         # Virtual env
 ❌ *.log, logs/          # Logs

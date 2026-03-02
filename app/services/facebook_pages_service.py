@@ -108,6 +108,15 @@ def post_to_page(db: Session, meta_page_id: int, user_id: int, message: str) -> 
     Post message to Facebook Page via Graph API. Uses stored page token.
     Returns True on success. Raises on API error.
     """
+    post_id = post_to_page_and_get_id(db, meta_page_id, user_id, message)
+    return post_id is not None
+
+
+def post_to_page_and_get_id(db: Session, meta_page_id: int, user_id: int, message: str) -> str | None:
+    """
+    Post message to Facebook Page via Graph API. Returns the Facebook post id (e.g. page_id_123) on success.
+    Raises ValueError on API error (rate limits, invalid token, etc.). TokenInvalidError handled by caller.
+    """
     page = db.query(MetaPage).filter(MetaPage.id == meta_page_id, MetaPage.user_id == user_id).first()
     if not page:
         raise ValueError("Page not found or not owned by user")
@@ -119,6 +128,8 @@ def post_to_page(db: Session, meta_page_id: int, user_id: int, message: str) -> 
             resp = client.post(url, data=payload)
             if not resp.is_success:
                 handle_meta_response(resp, "Post to page")
+            data = resp.json()
+            return data.get("id")
     except TokenInvalidError as e:
         _clear_user_token(db, page.user_id)
         db.commit()
@@ -127,4 +138,3 @@ def post_to_page(db: Session, meta_page_id: int, user_id: int, message: str) -> 
         raise
     except httpx.RequestError as e:
         raise ValueError("Post to page: Request failed. Please try again.") from e
-    return True

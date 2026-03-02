@@ -66,4 +66,4 @@ This is the single source of truth for what is implemented vs remaining. **Every
 
 ---
 
-**Last Updated:** February 2025. Phases 1–8 complete; **UI** (React: Dashboard, Content, Admin) in `frontend/`; tracking in IMPLEMENTATION_AND_REMAINING_DETAIL.txt.
+**Last Updated:** February 2025. Phases 1–8 complete; **Facebook Graph publish** (fb_api, Content fb_*); **AI theme generation** (Gemini, VCE); **UI** (React: Dashboard, Content, Publish to Facebook, New content with category/themes) in `frontend/`. Restart with Docker: `docker-compose down && docker-compose up --build`. Tracking in IMPLEMENTATION_AND_REMAINING_DETAIL.txt.

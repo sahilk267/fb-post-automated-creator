@@ -10,11 +10,18 @@ export interface Content {
   created_at: string;
   updated_at: string | null;
   approved_at: string | null;
+  fb_page_id?: string | null;
+  fb_post_id?: string | null;
+  fb_status?: string | null;
+  schedule_at?: string | null;
+  schedule_meta_page_id?: number | null;
 }
 
 export interface ContentCreate {
   title: string;
   body: string;
+  schedule_at?: string | null;
+  schedule_meta_page_id?: number | null;
 }
 
 export interface ContentUpdate {
@@ -53,4 +60,8 @@ export function approveContent(userId: number, id: number, data: ApprovalRequest
 
 export function deleteContent(userId: number, id: number): Promise<void> {
   return apiDelete(`content/${id}`, userId);
+}
+
+export function publishToFacebook(userId: number, contentId: number, metaPageId: number): Promise<Content> {
+  return apiPost<Content>(`content/${contentId}/publish-to-facebook`, userId, { meta_page_id: metaPageId });
 }

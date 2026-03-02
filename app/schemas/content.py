@@ -12,7 +12,8 @@ class ContentBase(BaseModel):
 
 class ContentCreate(ContentBase):
     """Schema for creating content."""
-    pass
+    schedule_at: Optional[datetime] = Field(None, description="Optional: when to publish (UTC); used after approval")
+    schedule_meta_page_id: Optional[int] = Field(None, description="Optional: page to publish to when schedule_at is set")
 
 
 class ContentUpdate(BaseModel):
@@ -30,7 +31,12 @@ class ContentResponse(ContentBase):
     created_at: datetime
     updated_at: Optional[datetime]
     approved_at: Optional[datetime]
-    
+    fb_page_id: Optional[str] = None
+    fb_post_id: Optional[str] = None
+    fb_status: Optional[str] = None  # "scheduled", "posted", "failed"
+    schedule_at: Optional[datetime] = None
+    schedule_meta_page_id: Optional[int] = None
+
     class Config:
         from_attributes = True
 
@@ -39,4 +45,9 @@ class ContentApprovalRequest(BaseModel):
     """Schema for approval/rejection request."""
     approved: bool
     comment: Optional[str] = None
+
+
+class PublishToFacebookRequest(BaseModel):
+    """Schema for publishing content to a Facebook Page."""
+    meta_page_id: int
 

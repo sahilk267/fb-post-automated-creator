@@ -10,7 +10,7 @@
   - Cursor rules (.cursor/rules/*.mdc) must be followed strictly.
 ================================================================================
   Stack: Python/FastAPI. Scaling/MVP scope: ROADMAP_AND_PRODUCT.md
-  Last verified: February 2025. Phases 1–8 DONE (share-psychology + pytest in place).
+  Last verified: February 2025. Phases 1–8 DONE; Facebook Graph publish (fb_api); AI theme generation (Gemini); Docker: init_db on start, GEMINI_API_KEY in compose.
 ================================================================================
 
 --------------------------------------------------------------------------------
@@ -26,6 +26,7 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
       - .env support
       - Meta OAuth (optional): facebook_app_id, facebook_app_secret, facebook_redirect_uri, token_encryption_key
       - cron_secret (optional) for POST /api/v1/cron/run (server-side only)
+      - gemini_api_key (optional) for AI theme generation (GET /vce/generate-themes)
 
   [x] app/core/database.py
       - SQLAlchemy engine (SQLite, check_same_thread=False)
@@ -42,6 +43,7 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
   [x] app/models/content.py
       - ContentStatus enum: DRAFT, PENDING_APPROVAL, APPROVED, REJECTED
       - Content: id, title, body, status, created_by_id, approved_by_id, created_at, updated_at, approved_at
+      - Facebook: fb_page_id (String 64), fb_post_id (String 128, nullable), fb_status (String 32: scheduled/posted/failed)
       - Relationships: creator, approver (User)
       - Table: content
 
@@ -68,11 +70,11 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
 --- 1.3 VALIDATION LAYER - SCHEMAS (100% DONE) ---
 
   [x] app/schemas/user.py - UserCreate, UserResponse (etc.)
-  [x] app/schemas/content.py - ContentCreate, ContentUpdate, ContentResponse, ContentApprovalRequest
+  [x] app/schemas/content.py - ContentCreate, ContentUpdate, ContentResponse, ContentApprovalRequest, PublishToFacebookRequest; ContentResponse includes fb_page_id, fb_post_id, fb_status
   [x] app/schemas/audit_log.py - AuditLogResponse
   [x] app/schemas/meta_page.py - MetaPageResponse (no token in response)
   [x] app/schemas/scheduled_post.py - ScheduledPostCreate, ScheduledPostResponse, PostingPreferenceCreate, PostingPreferenceResponse
-  [x] app/schemas/vce.py - ContentCategoryResponse, HookTemplateResponse, SuggestedCategoryResponse, SuggestedTemplateResponse
+  [x] app/schemas/vce.py - ContentCategoryResponse, HookTemplateResponse, SuggestedCategoryResponse, SuggestedTemplateResponse, GenerateThemesResponse
   [x] app/schemas/__init__.py - exports
 
 --- 1.4 BUSINESS LOGIC - SERVICES (100% DONE) ---
@@ -90,6 +92,10 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
       - approve_content(content_id, approval_data, approver_id) -> Optional[Content]
       - delete_content(content_id, user_id) -> bool (draft only)
       - Har content operation ke baad AuditService.log_action() call (single transaction)
+  [x] app/services/fb_api.py
+      - publish_to_facebook(db, content_id, meta_page_id, user_id) -> Content; posts title+body to Page feed; updates Content.fb_page_id, fb_post_id, fb_status (posted/failed); TokenInvalidError and rate-limit handling
+  [x] app/services/theme_generation_service.py
+      - generate_themes(db, category_id, category_name, count, extra_instruction) -> List[str] via Gemini; is_theme_generation_available()
 
 --- 1.5 API LAYER (100% DONE) ---
 
@@ -100,13 +106,14 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
   [x] app/api/routes/__init__.py
       - api_router: content, users, audit-logs, auth/facebook, meta/pages, scheduled-posts, cron
 
-  [x] app/api/routes/content.py (7 endpoints)
+  [x] app/api/routes/content.py (8 endpoints)
       - POST   /api/v1/content/              -> create_content (201)
       - GET    /api/v1/content/              -> list_content (filters: skip, limit, status)
       - GET    /api/v1/content/{id}         -> get_content
       - PATCH  /api/v1/content/{id}         -> update_content (draft only)
       - POST   /api/v1/content/{id}/submit  -> submit_for_approval
       - POST   /api/v1/content/{id}/approve  -> approve_content (admin only)
+      - POST   /api/v1/content/{id}/publish-to-facebook -> publish_to_facebook (body: meta_page_id)
       - DELETE /api/v1/content/{id}         -> delete_content (draft only)
 
   [x] app/api/routes/users.py (3 endpoints)
@@ -141,12 +148,14 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
       - fastapi==0.104.1, uvicorn[standard]==0.24.0, sqlalchemy==2.0.23
       - pydantic==2.5.0, pydantic-settings==2.1.0, python-dotenv==1.0.0, python-multipart==0.0.6
       - cryptography>=41.0.0, httpx>=0.25.0,<0.28.0 (TestClient compat), pytest>=7.4.0
+      - google-generativeai>=0.8.0, facebook-sdk>=3.1.0, requests>=2.31.0
 
   [x] Dockerfile
-      - Multi-stage: node:22-alpine builds frontend (npm install, npm run build); python:3.11-slim copies app + frontend/dist
-      - CMD uvicorn app.main:app --host 0.0.0.0 --port 8000; app serves SPA at / when frontend/dist present
+      - Multi-stage: node:22-alpine builds frontend (npm install, npm run build); python:3.11-slim copies app, scripts, frontend/dist
+      - CMD: python -m scripts.init_db (tables + seed) then uvicorn app.main:app --host 0.0.0.0 --port 8000; app serves SPA at / when frontend/dist present
 
-  [x] docker-compose.yml (assumed present for Docker runs)
+  [x] docker-compose.yml
+      - api service: build ., ports 8000, volumes ./app, ./data; env DATABASE_URL, DEBUG, GEMINI_API_KEY (from .env)
 
   [x] scripts/init_db.py
       - init_db() + create_sample_data(): admin user, user1, sample draft + pending content
@@ -172,6 +181,7 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
       - sync_pages(db, user_id) -> fetch /me/accounts, upsert MetaPage with encrypted page tokens; audit meta.pages_synced
       - list_pages(db, user_id) -> list user's pages (no token in response)
       - post_to_page(db, meta_page_id, user_id, message) -> POST to Graph API /{page_id}/feed
+      - post_to_page_and_get_id(db, meta_page_id, user_id, message) -> returns Facebook post id from response
       - OAuth + sync + post_to_page: Meta API errors handled; on TokenInvalidError (190/102) clear user token, commit, re-raise for re-auth
       - _clear_user_token(db, user_id) in facebook_pages_service; on TokenInvalidError clear token, commit, re-raise
   [x] app/services/facebook_oauth_service.py: disconnect_facebook(db, user_id) -> delete MetaUserToken + MetaPages, audit facebook.disconnected
@@ -209,6 +219,7 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
       - GET /api/v1/vce/categories/today -> suggested category (rotation); advisory
       - GET /api/v1/vce/templates -> list hook templates (optional category_id)
       - GET /api/v1/vce/suggested-template -> suggested template for today; advisory
+      - GET /api/v1/vce/generate-themes -> generate themes via Gemini (category_id, category_name, count); requires GEMINI_API_KEY
       - GET /api/v1/vce/share-psychology-tips -> advisory tips (advisory_only, tips[])
   [x] api_router: prefix /vce; scripts/init_db create_sample_data seeds VCE categories + templates if empty
   [x] api_router: prefix /auth/facebook, /meta/pages, /scheduled-posts, /cron, /vce; app.models imported before init_db()
@@ -227,10 +238,11 @@ PART 1: JO AB TAK IMPLEMENT HO CHUKA HAI (COMPLETE)
 
 --- SUMMARY: IMPLEMENTED ---
 
-  Total API endpoints: 31 (7 content + 3 users + 2 audit + 3 auth/facebook + 3 meta/pages + 6 scheduled-posts + 1 cron + 4 vce + 2 system)
-  Total Python app files: ~40 (core, models, schemas, services, api, main)
-  Database: SQLite, SQLAlchemy; users, content, audit_logs, oauth_states, meta_user_tokens, meta_pages, scheduled_posts, posting_preferences, content_categories, hook_templates via init_db()
+  Total API endpoints: 34 (8 content incl. publish-to-facebook + 3 users + 2 audit + 3 auth/facebook + 3 meta/pages + 6 scheduled-posts + 1 cron + 6 vce incl. generate-themes + 2 system)
+  Total Python app files: ~42 (core, models, schemas, services incl. fb_api, theme_generation_service, api, main)
+  Database: SQLite, SQLAlchemy; users, content (incl. fb_page_id, fb_post_id, fb_status), audit_logs, oauth_states, meta_user_tokens, meta_pages, scheduled_posts, posting_preferences, content_categories, hook_templates via init_db()
   Auth: Simplified (user_id query param); JWT not implemented
+  UI: Content detail has "Publish to Facebook" (page select + publish); New content has category -> AI themes (Gemini) -> load theme into form
 
 
 ================================================================================

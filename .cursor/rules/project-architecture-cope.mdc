@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+
+This project follows a monolithic Python/FastAPI architecture.
+
+- docs/ARCHITECTURE.md, docs/ROADMAP_AND_PRODUCT.md, and docs/IMPLEMENTATION_AND_REMAINING_DETAIL.txt are authoritative; respect them.
+- Do not introduce new services, layers, or technologies unless explicitly requested.
+- MVP scope must remain minimal and Meta-compliant. Clearly label suggestions as MVP vs post-MVP.
+- Post-MVP only (do not implement now): Media/File service, microservices split, Redis, Celery.

@@ -34,10 +34,10 @@ export default function ContentList() {
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
         >
           <option value="">All</option>
-          <option value="DRAFT">Draft</option>
-          <option value="PENDING_APPROVAL">Pending</option>
-          <option value="APPROVED">Approved</option>
-          <option value="REJECTED">Rejected</option>
+          <option value="draft">Draft</option>
+          <option value="pending_approval">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
         </select>
       </div>
       {loading ? (
@@ -52,12 +52,11 @@ export default function ContentList() {
             <li key={c.id}>
               <Link to={`/content/${c.id}`} className="block px-4 py-3 hover:bg-slate-50 flex items-center justify-between">
                 <span className="font-medium text-slate-900">{c.title}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  c.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                  c.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-800' :
-                  c.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                  'bg-slate-100 text-slate-600'
-                }`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                    c.status === 'pending_approval' ? 'bg-amber-100 text-amber-800' :
+                      c.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                        'bg-slate-100 text-slate-600'
+                  }`}>
                   {c.status}
                 </span>
               </Link>

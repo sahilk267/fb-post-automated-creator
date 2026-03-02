@@ -15,13 +15,13 @@ from app.schemas.scheduled_post import (
     PostingPreferenceResponse,
 )
 from app.services.scheduler_service import (
-    create_scheduled_post,
     get_scheduled_post,
     list_scheduled_posts,
     cancel_scheduled_post,
     set_posting_preference,
     get_posting_preference,
 )
+from app.scheduler import schedule_facebook_post
 
 router = APIRouter()
 
@@ -32,12 +32,12 @@ def schedule_post(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Schedule approved content to be posted to a page at a given time. User must own the page."""
-    sp = create_scheduled_post(
+    """Schedule approved content to be posted to a page at a given time (Celery task at eta). User must own the page."""
+    sp = schedule_facebook_post(
         db,
         content_id=data.content_id,
         meta_page_id=data.meta_page_id,
-        scheduled_at=data.scheduled_at,
+        publish_time=data.scheduled_at,
         user_id=current_user.id,
     )
     if not sp:

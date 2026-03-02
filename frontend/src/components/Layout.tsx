@@ -37,6 +37,7 @@ export default function Layout() {
             <nav className="flex items-center gap-4">
               <Link to="/" className="hover:text-slate-300">Dashboard</Link>
               <Link to="/content" className="hover:text-slate-300">Content</Link>
+              <Link to="/meta-pages" className="hover:text-slate-300">Facebook Pages</Link>
               {user?.is_admin && (
                 <>
                   <Link to="/audit-logs" className="hover:text-slate-300">Audit Logs</Link>

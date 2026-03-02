@@ -1,0 +1,27 @@
+---
+alwaysApply: true
+---
+
+Code consistency and clean development
+- Follow existing patterns and naming conventions in the codebase.
+- Avoid duplication; reuse existing logic.
+- Do not introduce unnecessary abstractions.
+- Prefer clear, readable code over clever solutions.
+
+Security-first engineering
+- Never expose secrets or credentials; flag potential security or compliance risks.
+- Prefer safe defaults over shortcuts.
+
+Stepwise execution and context awareness
+- Summarize understanding before implementing.
+- Complete one step fully before moving to the next.
+- Do not skip steps or jump ahead without confirmation.
+
+Systematic debugging and testing
+- Do not guess fixes; explain root cause briefly before proposing a fix.
+- Prefer small, verifiable changes.
+
+MVP-first, future-aware
+- Focus on MVP delivery; avoid premature optimization.
+- Keep future scalability in mind without implementing it early.
+- Clearly label suggestions as MVP or post-MVP.

@@ -2,17 +2,44 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { listContent, type Content } from '../api/content';
+import { listScheduledPosts, cancelScheduledPost, type ScheduledPost } from '../api/scheduledPosts';
+
+function scheduleStatusLabel(status: string): string {
+  switch (status) {
+    case 'pending': return 'Scheduled';
+    case 'processing': return 'Processing';
+    case 'posted': return 'Posted';
+    case 'failed': return 'Failed';
+    case 'cancelled': return 'Cancelled';
+    default: return status;
+  }
+}
+
+function scheduleStatusClass(status: string): string {
+  switch (status) {
+    case 'pending': return 'bg-blue-100 text-blue-800';
+    case 'processing': return 'bg-amber-100 text-amber-800';
+    case 'posted': return 'bg-emerald-100 text-emerald-800';
+    case 'failed': return 'bg-red-100 text-red-800';
+    case 'cancelled': return 'bg-slate-100 text-slate-600';
+    default: return 'bg-slate-100 text-slate-600';
+  }
+}
 
 export default function Dashboard() {
   const { userId } = useAuth();
   const [content, setContent] = useState<Content[]>([]);
+  const [scheduled, setScheduled] = useState<ScheduledPost[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (userId === null) return;
     listContent(userId, { limit: 50 })
       .then(setContent)
-      .catch(() => setContent([]))
+      .catch(() => setContent([]));
+    listScheduledPosts(userId, { limit: 20 })
+      .then(setScheduled)
+      .catch(() => setScheduled([]))
       .finally(() => setLoading(false));
   }, [userId]);
 
@@ -20,9 +47,21 @@ export default function Dashboard() {
     acc[c.status] = (acc[c.status] || 0) + 1;
     return acc;
   }, {});
-  const pending = byStatus['PENDING_APPROVAL'] ?? 0;
-  const approved = byStatus['APPROVED'] ?? 0;
-  const draft = byStatus['DRAFT'] ?? 0;
+  const pending = byStatus['pending_approval'] ?? 0;
+  const approved = byStatus['approved'] ?? 0;
+  const draft = byStatus['draft'] ?? 0;
+
+  async function handleCancel(postId: number) {
+    if (userId === null || !window.confirm('Cancel this scheduled post?')) return;
+    try {
+      await cancelScheduledPost(userId, postId);
+      // Refresh list
+      const updated = await listScheduledPosts(userId, { limit: 20 });
+      setScheduled(updated);
+    } catch (err) {
+      alert('Failed to cancel post');
+    }
+  }
 
   return (
     <div>
@@ -41,6 +80,38 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-emerald-600 mt-1">{approved}</p>
         </div>
       </div>
+
+      {scheduled.length > 0 && (
+        <>
+          <h2 className="text-lg font-medium text-slate-800 mb-3">Scheduled posts</h2>
+          <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden mb-8">
+            {scheduled.map((sp) => (
+              <li key={sp.id} className="block px-4 py-3 hover:bg-slate-50 flex items-center justify-between gap-2">
+                <Link to={`/content/${sp.content_id}`} className="flex-1 flex items-center justify-between gap-2">
+                  <span className="text-slate-900">Content #{sp.content_id}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 text-sm shrink-0">
+                      {new Date(sp.scheduled_at).toLocaleString()}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${scheduleStatusClass(sp.status)}`}>
+                      {scheduleStatusLabel(sp.status)}
+                    </span>
+                  </div>
+                </Link>
+                {sp.status === 'pending' && (
+                  <button
+                    onClick={() => handleCancel(sp.id)}
+                    className="ml-2 text-xs border border-slate-300 rounded px-2 py-1 text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-medium text-slate-800">Recent content</h2>
         <Link to="/content/new" className="text-indigo-600 hover:underline font-medium text-sm">New content</Link>
@@ -57,11 +128,10 @@ export default function Dashboard() {
             <li key={c.id}>
               <Link to={`/content/${c.id}`} className="block px-4 py-3 hover:bg-slate-50 flex items-center justify-between">
                 <span className="font-medium text-slate-900">{c.title}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  c.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                  c.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-800' :
-                  'bg-slate-100 text-slate-600'
-                }`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                    c.status === 'pending_approval' ? 'bg-amber-100 text-amber-800' :
+                      'bg-slate-100 text-slate-600'
+                  }`}>
                   {c.status}
                 </span>
               </Link>

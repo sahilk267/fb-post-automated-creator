@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import ContentList from './pages/ContentList';
 import ContentForm from './pages/ContentForm';
 import ContentDetail from './pages/ContentDetail';
+import MetaPages from './pages/MetaPages';
 import AuditLogs from './pages/AuditLogs';
 import Users from './pages/Users';
 
@@ -25,6 +26,7 @@ function AppRoutes() {
         <Route path="content/new" element={<RequireAuth><ContentForm /></RequireAuth>} />
         <Route path="content/:id" element={<RequireAuth><ContentDetail /></RequireAuth>} />
         <Route path="content/:id/edit" element={<RequireAuth><ContentForm /></RequireAuth>} />
+        <Route path="meta-pages" element={<RequireAuth><MetaPages /></RequireAuth>} />
         <Route path="audit-logs" element={<RequireAuth><AuditLogs /></RequireAuth>} />
         <Route path="users" element={<RequireAuth><Users /></RequireAuth>} />
       </Route>

@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, HTTPException, status
@@ -23,11 +24,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create DB tables on startup (safe to call every time)."""
+    init_db()
+    logger.info("Database tables initialized.")
+    yield
+    # no shutdown cleanup needed for SQLite
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    debug=settings.debug
+    debug=settings.debug,
+    lifespan=lifespan,
 )
 
 # CORS middleware
