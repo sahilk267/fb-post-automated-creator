@@ -190,3 +190,43 @@ def post_media_to_page_and_get_id(
         raise ValueError(f"Post media failed: {str(e)}")
     finally:
         files["source"].close()
+def get_post_insights(db: Session, fb_post_id: str, meta_page_id: int, user_id: int) -> dict:
+    """
+    Fetch insights for a specific post.
+    Metrics: post_impressions_unique (Reach), post_engaged_users (Engagement).
+    """
+    page = db.query(MetaPage).filter(MetaPage.id == meta_page_id, MetaPage.user_id == user_id).first()
+    if not page:
+        raise ValueError("Page not found or not owned by user")
+    
+    token = decrypt_token(page.access_token_encrypted)
+    # FB Post IDs are usually PageID_PostID. The Insights API needs the Post ID.
+    url = f"{META_GRAPH_BASE}/{fb_post_id}/insights"
+    params = {
+        "access_token": token,
+        "metric": "post_impressions_unique,post_engaged_users"
+    }
+    
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, params=params)
+            if not resp.is_success:
+                handle_meta_response(resp, "Get post insights")
+            data = resp.json()
+            
+            insights = {"reach": 0, "engagement": 0}
+            for metric in data.get("data", []):
+                name = metric.get("name")
+                values = metric.get("values", [])
+                if not values:
+                    continue
+                val = values[0].get("value", 0)
+                
+                if name == "post_impressions_unique":
+                    insights["reach"] = val
+                elif name == "post_engaged_users":
+                    insights["engagement"] = val
+            
+            return insights
+    except Exception as e:
+        raise ValueError(f"Failed to fetch insights: {str(e)}")

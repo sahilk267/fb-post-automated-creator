@@ -13,6 +13,7 @@ from app.schemas.content import (
     ContentResponse,
     ContentApprovalRequest,
     PublishToFacebookRequest,
+    InsightsResponse,
 )
 from app.services.content_service import ContentService
 from app.services.fb_api import publish_to_facebook
@@ -222,6 +223,46 @@ def delete_content(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Content not found"
             )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.get("/{content_id}/insights", response_model=InsightsResponse)
+def get_content_insights(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Fetch insights for a published post."""
+    service = ContentService(db)
+    content = service.get_content(content_id)
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content not found"
+        )
+    
+    if content.fb_status != "posted" or not content.fb_post_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Content has not been posted to Facebook yet"
+        )
+    
+    from app.models.meta_page import MetaPage
+    page = db.query(MetaPage).filter(MetaPage.page_id == content.fb_page_id, MetaPage.user_id == current_user.id).first()
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meta Page not found for this post"
+        )
+    
+    from app.services.facebook_pages_service import get_post_insights
+    try:
+        insights = get_post_insights(db, content.fb_post_id, page.id, current_user.id)
+        return insights
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

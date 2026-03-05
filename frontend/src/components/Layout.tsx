@@ -31,7 +31,9 @@ export default function Layout() {
           {!isLogin && location.pathname !== '/signup' && (
             <nav className="flex items-center gap-4">
               <Link to="/" className="hover:text-slate-300">Dashboard</Link>
+              <Link to="/calendar" className="hover:text-slate-300">Calendar</Link>
               <Link to="/content" className="hover:text-slate-300">Content</Link>
+              <Link to="/insights" className="hover:text-slate-300">Insights</Link>
               <Link to="/meta-pages" className="hover:text-slate-300">Facebook Pages</Link>
               {user?.is_admin && (
                 <>

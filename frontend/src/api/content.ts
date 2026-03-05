@@ -1,5 +1,4 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from './client';
-import { type Media } from './media';
 
 export interface Content {
   id: number;
@@ -68,4 +67,12 @@ export function deleteContent(id: number): Promise<void> {
 
 export function publishToFacebook(contentId: number, metaPageId: number): Promise<Content> {
   return apiPost<Content>(`content/${contentId}/publish-to-facebook`, { meta_page_id: metaPageId });
+}
+export interface Insights {
+  reach: number;
+  engagement: number;
+}
+
+export function getInsights(contentId: number): Promise<Insights> {
+  return apiGet<Insights>(`content/${contentId}/insights`);
 }

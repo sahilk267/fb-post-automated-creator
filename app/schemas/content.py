@@ -54,3 +54,9 @@ class PublishToFacebookRequest(BaseModel):
     """Schema for publishing content to a Facebook Page."""
     meta_page_id: int
 
+
+class InsightsResponse(BaseModel):
+    """Schema for post insights response."""
+    reach: int
+    engagement: int
+

@@ -9,6 +9,8 @@ import ContentDetail from './pages/ContentDetail';
 import MetaPages from './pages/MetaPages';
 import AuditLogs from './pages/AuditLogs';
 import Users from './pages/Users';
+import Insights from './pages/Insights';
+import Calendar from './pages/Calendar';
 import Signup from './pages/Signup';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -31,6 +33,8 @@ function AppRoutes() {
         <Route path="meta-pages" element={<RequireAuth><MetaPages /></RequireAuth>} />
         <Route path="audit-logs" element={<RequireAuth><AuditLogs /></RequireAuth>} />
         <Route path="users" element={<RequireAuth><Users /></RequireAuth>} />
+        <Route path="insights" element={<RequireAuth><Insights /></RequireAuth>} />
+        <Route path="calendar" element={<RequireAuth><Calendar /></RequireAuth>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
