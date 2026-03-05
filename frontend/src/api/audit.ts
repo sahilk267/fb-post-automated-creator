@@ -12,8 +12,7 @@ export interface AuditLog {
 }
 
 export function listAuditLogs(
-  userId: number,
   params?: { skip?: number; limit?: number; entity_type?: string; action?: string }
 ): Promise<AuditLog[]> {
-  return apiGet<AuditLog[]>('audit-logs/', userId, params as Record<string, string | number | undefined>);
+  return apiGet<AuditLog[]>('audit-logs/', params as Record<string, string | number | undefined>);
 }

@@ -71,61 +71,115 @@ def schedule_facebook_post(
     return sp
 
 
-@celery_app.task(bind=True, name="app.publish_to_facebook_task")
+@celery_app.task(
+    bind=True, 
+    name="app.publish_to_facebook_task",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 5},
+    retry_jitter=True
+)
 def publish_to_facebook_task(self, scheduled_post_id: int):
     """
-    Celery task: load ScheduledPost, set PROCESSING, post to Facebook, set POSTED or FAILED.
-    Updates Content.fb_page_id, fb_post_id, fb_status on success.
+    Celery task: load ScheduledPost, set PROCESSING, post to Facebook via fb_api service.
     """
+    from app.services.fb_api import publish_to_facebook
+    
     db = SessionLocal()
     try:
         sp = db.query(ScheduledPost).filter(ScheduledPost.id == scheduled_post_id).first()
         if not sp:
             return {"ok": False, "reason": "ScheduledPost not found"}
-        if sp.status != ScheduledPostStatus.PENDING:
-            return {"ok": False, "reason": f"Invalid status {sp.status}"}
+        
+        # If already posted or failed after retries, skip
+        if sp.status in [ScheduledPostStatus.POSTED, ScheduledPostStatus.CANCELLED]:
+            return {"ok": True, "status": sp.status.value}
+
         sp.status = ScheduledPostStatus.PROCESSING
         db.commit()
 
-        content = db.query(Content).filter(Content.id == sp.content_id).first()
-        page = db.query(MetaPage).filter(MetaPage.id == sp.meta_page_id).first()
-        if not content:
-            sp.status = ScheduledPostStatus.FAILED
-            sp.failure_reason = "Content not found"
-            db.commit()
-            return {"ok": False, "reason": "Content not found"}
-        if not page:
-            sp.status = ScheduledPostStatus.FAILED
-            sp.failure_reason = "Page not found"
-            db.commit()
-            return {"ok": False, "reason": "Page not found"}
-
-        message = f"{content.title}\n\n{content.body}"
-        now = datetime.now(timezone.utc)
         try:
-            fb_post_id = post_to_page_and_get_id(db, sp.meta_page_id, page.user_id, message)
+            # Use the unified publish_to_facebook service (handles text/media)
+            publish_to_facebook(
+                db=db,
+                content_id=sp.content_id,
+                meta_page_id=sp.meta_page_id,
+                user_id=sp.meta_page.user_id,
+            )
+            
             sp.status = ScheduledPostStatus.POSTED
-            sp.posted_at = now
+            sp.posted_at = datetime.now(timezone.utc)
             sp.failure_reason = None
-            content.fb_page_id = page.page_id
-            content.fb_post_id = fb_post_id or ""
-            content.fb_status = "posted"
-            AuditService.log_action(
-                db, "scheduled_post.posted", "scheduled_post", sp.id, page.user_id,
-                "Post published to Facebook page", {"content_id": content.id, "meta_page_id": sp.meta_page_id},
-            )
             db.commit()
-            return {"ok": True, "posted_at": now.isoformat()}
+            return {"ok": True, "status": "posted"}
+            
         except Exception as e:
-            sp.status = ScheduledPostStatus.FAILED
-            sp.failure_reason = str(e)[:512]
-            content.fb_status = "failed"
-            content.fb_page_id = page.page_id
-            AuditService.log_action(
-                db, "scheduled_post.failed", "scheduled_post", sp.id, page.user_id,
-                f"Scheduled post failed: {str(e)[:200]}", {"scheduled_post_id": sp.id},
-            )
-            db.commit()
-            return {"ok": False, "reason": str(e)[:200]}
+            # Check if we should retry or if it's a fatal error
+            # For now, let autoretry_for handle it, but update status on final failure
+            if self.request.retries >= self.max_retries:
+                sp.status = ScheduledPostStatus.FAILED
+                sp.failure_reason = str(e)[:512]
+                db.commit()
+            else:
+                # Keep as PROCESSING or PENDING for retry? 
+                # Celery retry will re-run the task. Let's mark as PROCESSING for now.
+                pass
+            raise e # Reraise for celery retry
+            
     finally:
         db.close()
+
+
+@celery_app.task(name="app.token_guard_task")
+def token_guard_task():
+    """
+    Periodic task: Check all MetaUserTokens for expiration and log warnings.
+    """
+    from app.models.meta_oauth import MetaUserToken
+    from app.services.audit_service import AuditService
+    from datetime import timedelta
+    
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        warning_threshold = now + timedelta(days=7)
+        
+        tokens = db.query(MetaUserToken).all()
+        results = {"checked": len(tokens), "warning": 0, "expired": 0}
+        
+        for t in tokens:
+            if not t.expires_at:
+                continue
+                
+            # Ensure expires_at is timezone-aware for comparison
+            expires_at = t.expires_at
+            if not expires_at.tzinfo:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+                
+            if expires_at < now:
+                results["expired"] += 1
+                AuditService.log_action(
+                    db, "token.expired", "user", t.user_id, t.user_id,
+                    f"Meta access token for user {t.user_id} has expired.",
+                    {"expires_at": expires_at.isoformat()}
+                )
+            elif expires_at < warning_threshold:
+                results["warning"] += 1
+                AuditService.log_action(
+                    db, "token.warning", "user", t.user_id, t.user_id,
+                    f"Meta access token for user {t.user_id} expires soon.",
+                    {"expires_at": expires_at.isoformat()}
+                )
+        
+        db.commit()
+        return results
+    finally:
+        db.close()
+
+# Periodic task schedule
+celery_app.conf.beat_schedule = {
+    "check-tokens-daily": {
+        "task": "app.token_guard_task",
+        "schedule": 86400.0, # 24 hours
+    },
+}

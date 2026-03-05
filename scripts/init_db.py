@@ -1,10 +1,48 @@
-"""Initialize database with sample data."""
+import sqlite3
+import os
 import app.models  # noqa: F401 - register all model tables before init_db()
-from app.core.database import init_db, SessionLocal
+from app.core.database import init_db, SessionLocal, engine
 from app.models.user import User
 from app.models.content import Content, ContentStatus
 from app.models.content_category import ContentCategory
 from app.models.hook_template import HookTemplate
+
+
+def migrate_schema():
+    """Ensure database schema matches latest models (specifically for users.hashed_password)."""
+    db_url = str(engine.url)
+    if not db_url.startswith("sqlite"):
+        return
+    
+    path = db_url.replace("sqlite:///", "").replace("sqlite://", "")
+    if not os.path.exists(path):
+        return
+
+    print(f"Checking schema for: {path}")
+    conn = sqlite3.connect(path)
+    cur = conn.cursor()
+    
+    # Check users table
+    cur.execute("PRAGMA table_info(users)")
+    columns = {row[1] for row in cur.fetchall()}
+    
+    if columns and "hashed_password" not in columns:
+        print("Migrating: Adding hashed_password to users table...")
+        cur.execute("ALTER TABLE users ADD COLUMN hashed_password VARCHAR(255)")
+        conn.commit()
+        print("Migration successful.")
+    
+    # Check content table
+    cur.execute("PRAGMA table_info(content)")
+    content_columns = {row[1] for row in cur.fetchall()}
+    if content_columns and "media_id" not in content_columns:
+        print("Migrating: Adding media_id to content table...")
+        cur.execute("ALTER TABLE content ADD COLUMN media_id INTEGER REFERENCES media(id)")
+        conn.commit()
+        print("Migration successful.")
+    
+    conn.close()
+
 
 
 def create_sample_data():
@@ -15,11 +53,13 @@ def create_sample_data():
         if db.query(User).first() is not None:
             print("Users already exist, skipping sample data.")
             return
+        from app.core import security
         # Create admin user
         admin = User(
             username="admin",
             email="admin@example.com",
             full_name="Admin User",
+            hashed_password=security.get_password_hash("admin123"),
             is_active=True,
             is_admin=True
         )
@@ -30,6 +70,7 @@ def create_sample_data():
             username="user1",
             email="user1@example.com",
             full_name="Regular User",
+            hashed_password=security.get_password_hash("password123"),
             is_active=True,
             is_admin=False
         )
@@ -103,7 +144,9 @@ def create_sample_data():
 
 
 if __name__ == "__main__":
-    print("Initializing database...")
+    print("Migrating database schema...")
+    migrate_schema()
+    print("Initializing database tables...")
     init_db()
     print("Creating sample data...")
     create_sample_data()

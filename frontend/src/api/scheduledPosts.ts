@@ -14,16 +14,14 @@ export interface ScheduledPost {
 }
 
 export function listScheduledPosts(
-  userId: number,
   params?: { status?: string; meta_page_id?: number; skip?: number; limit?: number }
 ): Promise<ScheduledPost[]> {
-  return apiGet<ScheduledPost[]>('scheduled-posts/', userId, params as Record<string, string | number | undefined>);
+  return apiGet<ScheduledPost[]>('scheduled-posts/', params as Record<string, string | number | undefined>);
 }
 
-export function cancelScheduledPost(userId: number, scheduledPostId: number): Promise<{ cancelled: boolean }> {
+export function cancelScheduledPost(scheduledPostId: number): Promise<{ cancelled: boolean }> {
   return apiFetch<{ cancelled: boolean }>(`scheduled-posts/${scheduledPostId}/cancel`, {
-    method: 'PATCH',
-    userId,
+    method: 'PATCH'
   });
 }
 
@@ -34,21 +32,18 @@ export interface PostingPreference {
   max_posts_per_day: number;
 }
 
-export function getPostingPreference(userId: number, metaPageId: number): Promise<PostingPreference> {
+export function getPostingPreference(metaPageId: number): Promise<PostingPreference> {
   return apiFetch<PostingPreference>(`scheduled-posts/preferences/${metaPageId}`, {
-    method: 'GET',
-    userId,
+    method: 'GET'
   });
 }
 
 export function updatePostingPreference(
-  userId: number,
   metaPageId: number,
   data: { cooldown_minutes: number; max_posts_per_day: number }
 ): Promise<PostingPreference> {
   return apiFetch<PostingPreference>(`scheduled-posts/preferences/${metaPageId}`, {
     method: 'PUT',
-    userId,
     body: JSON.stringify(data),
   } as any);
 }

@@ -30,6 +30,10 @@ def create_content(
     service = ContentService(db)
     try:
         content = service.create_content(content_data, current_user.id)
+        if content.media:
+            from app.services.media_service import MediaService
+            media_service = MediaService(db)
+            content.media.url = media_service.get_public_url(content.media)
         return content
     except Exception as e:
         raise HTTPException(
@@ -71,6 +75,16 @@ def list_content(
         status=content_status,
         user_id=filter_user_id,
     )
+
+    # Populate media URLs
+    media_service = None
+    for content in content_list:
+        if content.media:
+            if media_service is None:
+                from app.services.media_service import MediaService
+                media_service = MediaService(db)
+            content.media.url = media_service.get_public_url(content.media)
+            
     return content_list
 
 
@@ -88,6 +102,13 @@ def get_content(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Content not found"
         )
+    
+    # Populate media URL if exists
+    if content.media:
+        from app.services.media_service import MediaService
+        media_service = MediaService(db)
+        content.media.url = media_service.get_public_url(content.media)
+        
     return content
 
 

@@ -3,17 +3,17 @@ import { useAuth } from '../context/AuthContext';
 import { listAuditLogs, type AuditLog } from '../api/audit';
 
 export default function AuditLogs() {
-  const { userId } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userId === null) return;
-    listAuditLogs(userId, { limit: 100 })
+    if (!isAuthenticated) return;
+    listAuditLogs({ limit: 100 })
       .then(setLogs)
       .catch(() => setLogs([]))
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [isAuthenticated]);
 
   return (
     <div>

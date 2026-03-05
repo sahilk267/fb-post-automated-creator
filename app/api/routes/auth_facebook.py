@@ -11,14 +11,34 @@ from app.services.facebook_oauth_service import get_authorize_url, exchange_code
 router = APIRouter()
 
 
+from jose import jwt, JWTError
+from pydantic import ValidationError
+from app.core.config import settings
+from app.schemas.user import TokenPayload
+
 @router.get("/login")
 def facebook_login(
-    current_user: User = Depends(get_current_user),
+    token: str = Query(..., description="JWT Token from frontend since Redirect can't set headers"),
     db: Session = Depends(get_db),
 ):
-    """Redirect to Facebook OAuth consent. Requires current user (query param for MVP)."""
+    """
+    Redirect to Facebook OAuth consent.
+    Manually decode JWT since `window.location.href` cannot send Authentication headers.
+    """
     try:
-        url = get_authorize_url(db, current_user.id)
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        token_data = TokenPayload(**payload)
+        user = db.query(User).filter(User.id == int(token_data.sub)).first()
+        if not user or not user.is_active:
+            raise ValueError("Invalid user status")
+    except (JWTError, ValidationError, ValueError) as e:
+        return RedirectResponse(
+            url=f"/?error=authentication_failed&message={e!s}",
+            status_code=302,
+        )
+
+    try:
+        url = get_authorize_url(db, user.id)
         return RedirectResponse(url=url, status_code=302)
     except ValueError as e:
         return RedirectResponse(

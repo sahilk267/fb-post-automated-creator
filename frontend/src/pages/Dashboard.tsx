@@ -27,21 +27,21 @@ function scheduleStatusClass(status: string): string {
 }
 
 export default function Dashboard() {
-  const { userId } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [content, setContent] = useState<Content[]>([]);
   const [scheduled, setScheduled] = useState<ScheduledPost[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userId === null) return;
-    listContent(userId, { limit: 50 })
+    if (!isAuthenticated) return;
+    listContent({ limit: 50 })
       .then(setContent)
       .catch(() => setContent([]));
-    listScheduledPosts(userId, { limit: 20 })
+    listScheduledPosts({ limit: 20 })
       .then(setScheduled)
       .catch(() => setScheduled([]))
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [isAuthenticated]);
 
   const byStatus = content.reduce<Record<string, number>>((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1;
@@ -52,11 +52,11 @@ export default function Dashboard() {
   const draft = byStatus['draft'] ?? 0;
 
   async function handleCancel(postId: number) {
-    if (userId === null || !window.confirm('Cancel this scheduled post?')) return;
+    if (!isAuthenticated || !window.confirm('Cancel this scheduled post?')) return;
     try {
-      await cancelScheduledPost(userId, postId);
+      await cancelScheduledPost(postId);
       // Refresh list
-      const updated = await listScheduledPosts(userId, { limit: 20 });
+      const updated = await listScheduledPosts({ limit: 20 });
       setScheduled(updated);
     } catch (err) {
       alert('Failed to cancel post');
@@ -129,8 +129,8 @@ export default function Dashboard() {
               <Link to={`/content/${c.id}`} className="block px-4 py-3 hover:bg-slate-50 flex items-center justify-between">
                 <span className="font-medium text-slate-900">{c.title}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
-                    c.status === 'pending_approval' ? 'bg-amber-100 text-amber-800' :
-                      'bg-slate-100 text-slate-600'
+                  c.status === 'pending_approval' ? 'bg-amber-100 text-amber-800' :
+                    'bg-slate-100 text-slate-600'
                   }`}>
                   {c.status}
                 </span>

@@ -9,10 +9,11 @@ import ContentDetail from './pages/ContentDetail';
 import MetaPages from './pages/MetaPages';
 import AuditLogs from './pages/AuditLogs';
 import Users from './pages/Users';
+import Signup from './pages/Signup';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { userId } = useAuth();
-  if (userId === null) return <Navigate to="/login" replace />;
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -20,6 +21,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/" element={<Layout />}>
         <Route index element={<RequireAuth><Dashboard /></RequireAuth>} />
         <Route path="content" element={<RequireAuth><ContentList /></RequireAuth>} />

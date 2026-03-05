@@ -38,3 +38,18 @@ services:
       - redis
     restart: unless-stopped
 
+  celery-beat:
+    build: .
+    command: celery -A app.scheduler beat -l info
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite:////app/data/content_platform.db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped

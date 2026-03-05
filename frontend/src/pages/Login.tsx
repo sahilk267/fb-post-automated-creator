@@ -1,31 +1,30 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getMe } from '../api/users';
+import { login } from '../api/auth';
 
 export default function Login() {
-  const [userId, setUserId] = useState('1');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { setUserId: setAuthUserId, setUser } = useAuth();
+  const { login: authLogin } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const id = parseInt(userId, 10);
-    if (Number.isNaN(id) || id < 1) {
-      setError('Enter a valid user ID (e.g. 1)');
+    if (!username || !password) {
+      setError('Please enter both username and password.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      const user = await getMe(id);
-      setAuthUserId(id);
-      setUser(user);
+      const { token, user } = await login(username, password);
+      authLogin(token.access_token, user);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'User not found. Run scripts/init_db.py to seed users.');
+      setError(err instanceof Error ? err.message : 'Invalid credentials.');
     } finally {
       setLoading(false);
     }
@@ -33,35 +32,46 @@ export default function Login() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-lg border border-slate-200 p-8">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-2">Sign in</h1>
-        <p className="text-slate-500 text-sm mb-6">
-          MVP: use user ID (e.g. 1 for admin). Seed DB with scripts/init_db.py.
-        </p>
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-8">
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome Back</h1>
+        <p className="text-slate-500 text-sm mb-6">Sign in to manage your content automation.</p>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="userId" className="block text-sm font-medium text-slate-700 mb-1">User ID</label>
+            <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1">Username</label>
             <input
-              id="userId"
+              id="username"
               type="text"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="1"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+              placeholder="admin"
               autoFocus
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+              placeholder="••••••••"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-slate-900 text-white py-2.5 font-medium hover:bg-slate-800 disabled:opacity-50"
+            className="w-full rounded-lg bg-indigo-600 text-white py-2.5 font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md shadow-indigo-200"
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm text-slate-500">
-          <a href="/docs" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">API Docs</a>
+
+        <p className="mt-8 text-center text-sm text-slate-500">
+          Don't have an account? <Link to="/signup" className="text-indigo-600 font-semibold hover:underline">Sign up</Link>
         </p>
       </div>
     </div>

@@ -1,0 +1,88 @@
+"""Media API routes."""
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.api.dependencies import get_current_user
+from app.models.user import User
+from app.schemas.media import MediaResponse
+from app.services.media_service import MediaService
+
+router = APIRouter()
+
+
+@router.post("/upload", response_model=MediaResponse, status_code=status.HTTP_201_CREATED)
+async def upload_media(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload a media file (image or video).
+    """
+    # Simple validation for file type
+    if not file.content_type or not (file.content_type.startswith("image/") or file.content_type.startswith("video/")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only image or video files are allowed"
+        )
+    
+    service = MediaService(db)
+    try:
+        media = service.save_upload(file, current_user.id)
+        # Add public URL for convenience
+        media_response = MediaResponse.from_orm(media)
+        media_response.url = service.get_public_url(media)
+        return media_response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload failed: {str(e)}"
+        )
+
+
+@router.get("/", response_model=List[MediaResponse])
+def list_user_media(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List all media uploaded by the current user."""
+    service = MediaService(db)
+    media_list = service.get_user_media(current_user.id)
+    
+    # Map to include URLs
+    responses = []
+    for m in media_list:
+        res = MediaResponse.from_orm(m)
+        res.url = service.get_public_url(m)
+        responses.append(res)
+        
+    return responses
+
+
+@router.get("/{media_id}", response_model=MediaResponse)
+def get_media(
+    media_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get media details by ID."""
+    service = MediaService(db)
+    media = service.get_media(media_id)
+    
+    if not media:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media not found"
+        )
+        
+    if media.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No permission to access this media"
+        )
+        
+    res = MediaResponse.from_orm(media)
+    res.url = service.get_public_url(media)
+    return res

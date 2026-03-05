@@ -7,11 +7,11 @@ export interface MetaPage {
   category: string | null;
 }
 
-export function listPages(userId: number): Promise<MetaPage[]> {
-  return apiGet<MetaPage[]>('meta/pages/', userId);
+export function listPages(): Promise<MetaPage[]> {
+  return apiGet<MetaPage[]>('meta/pages/');
 }
 
 /** Sync pages from Facebook (requires connected account). Returns { synced: number }. */
-export function syncPages(userId: number): Promise<{ synced: number }> {
-  return apiPost<{ synced: number }>('meta/pages/sync', userId);
+export function syncPages(): Promise<{ synced: number }> {
+  return apiPost<{ synced: number }>('meta/pages/sync');
 }

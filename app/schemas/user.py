@@ -13,7 +13,19 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Schema for creating a user."""
-    pass
+    password: str = Field(..., min_length=8, max_length=100)
+
+
+class Token(BaseModel):
+    """Access token schema."""
+    access_token: str
+    token_type: str
+
+
+class TokenPayload(BaseModel):
+    """JWT payload schema."""
+    sub: Optional[str] = None
+    exp: Optional[int] = None
 
 
 class UserResponse(UserBase):

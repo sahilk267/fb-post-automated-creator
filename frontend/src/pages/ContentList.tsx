@@ -4,19 +4,19 @@ import { useAuth } from '../context/AuthContext';
 import { listContent, type Content } from '../api/content';
 
 export default function ContentList() {
-  const { userId } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [content, setContent] = useState<Content[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userId === null) return;
+    if (!isAuthenticated) return;
     const params = statusFilter ? { limit: 100, status: statusFilter } : { limit: 100 };
-    listContent(userId, params)
+    listContent(params)
       .then(setContent)
       .catch(() => setContent([]))
       .finally(() => setLoading(false));
-  }, [userId, statusFilter]);
+  }, [isAuthenticated, statusFilter]);
 
   return (
     <div>
@@ -53,9 +53,9 @@ export default function ContentList() {
               <Link to={`/content/${c.id}`} className="block px-4 py-3 hover:bg-slate-50 flex items-center justify-between">
                 <span className="font-medium text-slate-900">{c.title}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
-                    c.status === 'pending_approval' ? 'bg-amber-100 text-amber-800' :
-                      c.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                        'bg-slate-100 text-slate-600'
+                  c.status === 'pending_approval' ? 'bg-amber-100 text-amber-800' :
+                    c.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-slate-100 text-slate-600'
                   }`}>
                   {c.status}
                 </span>

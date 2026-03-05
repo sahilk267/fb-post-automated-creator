@@ -13,13 +13,12 @@ export interface GenerateThemesResponse {
   available: boolean;
 }
 
-export function getCategories(userId: number): Promise<ContentCategory[]> {
-  return apiGet<ContentCategory[]>('vce/categories', userId);
+export function getCategories(): Promise<ContentCategory[]> {
+  return apiGet<ContentCategory[]>('vce/categories');
 }
 
 export function generateThemes(
-  userId: number,
   params: { category_id?: number; category_name?: string; count?: number }
 ): Promise<GenerateThemesResponse> {
-  return apiGet<GenerateThemesResponse>('vce/generate-themes', userId, params as Record<string, string | number | undefined>);
+  return apiGet<GenerateThemesResponse>('vce/generate-themes', params as Record<string, string | number | undefined>);
 }

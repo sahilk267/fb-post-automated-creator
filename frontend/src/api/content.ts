@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from './client';
+import { type Media } from './media';
 
 export interface Content {
   id: number;
@@ -15,6 +16,7 @@ export interface Content {
   fb_status?: string | null;
   schedule_at?: string | null;
   schedule_meta_page_id?: number | null;
+  media_id?: number | null;
 }
 
 export interface ContentCreate {
@@ -22,11 +24,13 @@ export interface ContentCreate {
   body: string;
   schedule_at?: string | null;
   schedule_meta_page_id?: number | null;
+  media_id?: number | null;
 }
 
 export interface ContentUpdate {
   title?: string;
   body?: string;
+  media_id?: number | null;
 }
 
 export interface ApprovalRequest {
@@ -34,34 +38,34 @@ export interface ApprovalRequest {
   comment?: string;
 }
 
-export function listContent(userId: number, params?: { skip?: number; limit?: number; status?: string }): Promise<Content[]> {
-  return apiGet<Content[]>('content/', userId, params as Record<string, string | number | undefined>);
+export function listContent(params?: { skip?: number; limit?: number; status?: string }): Promise<Content[]> {
+  return apiGet<Content[]>('content/', params as Record<string, string | number | undefined>);
 }
 
-export function getContent(userId: number, id: number): Promise<Content> {
-  return apiGet<Content>(`content/${id}`, userId);
+export function getContent(id: number): Promise<Content> {
+  return apiGet<Content>(`content/${id}`);
 }
 
-export function createContent(userId: number, data: ContentCreate): Promise<Content> {
-  return apiPost<Content>('content/', userId, data);
+export function createContent(data: ContentCreate): Promise<Content> {
+  return apiPost<Content>('content/', data);
 }
 
-export function updateContent(userId: number, id: number, data: ContentUpdate): Promise<Content> {
-  return apiPatch<Content>(`content/${id}`, userId, data);
+export function updateContent(id: number, data: ContentUpdate): Promise<Content> {
+  return apiPatch<Content>(`content/${id}`, data);
 }
 
-export function submitForApproval(userId: number, id: number): Promise<Content> {
-  return apiPost<Content>(`content/${id}/submit`, userId);
+export function submitForApproval(id: number): Promise<Content> {
+  return apiPost<Content>(`content/${id}/submit`);
 }
 
-export function approveContent(userId: number, id: number, data: ApprovalRequest): Promise<Content> {
-  return apiPost<Content>(`content/${id}/approve`, userId, data);
+export function approveContent(id: number, data: ApprovalRequest): Promise<Content> {
+  return apiPost<Content>(`content/${id}/approve`, data);
 }
 
-export function deleteContent(userId: number, id: number): Promise<void> {
-  return apiDelete(`content/${id}`, userId);
+export function deleteContent(id: number): Promise<void> {
+  return apiDelete(`content/${id}`);
 }
 
-export function publishToFacebook(userId: number, contentId: number, metaPageId: number): Promise<Content> {
-  return apiPost<Content>(`content/${contentId}/publish-to-facebook`, userId, { meta_page_id: metaPageId });
+export function publishToFacebook(contentId: number, metaPageId: number): Promise<Content> {
+  return apiPost<Content>(`content/${contentId}/publish-to-facebook`, { meta_page_id: metaPageId });
 }

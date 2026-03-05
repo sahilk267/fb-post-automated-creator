@@ -39,11 +39,14 @@ class Content(Base):
     fb_post_id = Column(String(128), nullable=True)
     fb_status = Column(String(32), nullable=True)  # "scheduled", "posted", "failed"
 
-    # Optional schedule intent: when set and content is approved, a ScheduledPost is created and Celery task enqueued
     schedule_at = Column(DateTime(timezone=True), nullable=True)
     schedule_meta_page_id = Column(Integer, ForeignKey("meta_pages.id"), nullable=True, index=True)
+
+    # Media association
+    media_id = Column(Integer, ForeignKey("media.id"), nullable=True, index=True)
 
     # Relationships
     creator = relationship("User", foreign_keys=[created_by_id], backref="created_content")
     approver = relationship("User", foreign_keys=[approved_by_id], backref="approved_content")
+    media = relationship("Media", foreign_keys=[media_id], backref="content_items")
 

@@ -138,3 +138,55 @@ def post_to_page_and_get_id(db: Session, meta_page_id: int, user_id: int, messag
         raise
     except httpx.RequestError as e:
         raise ValueError("Post to page: Request failed. Please try again.") from e
+
+
+def post_media_to_page_and_get_id(
+    db: Session,
+    meta_page_id: int,
+    user_id: int,
+    message: str,
+    media_path: str,
+    mime_type: str
+) -> str | None:
+    """
+    Post image or video to Facebook Page via Graph API.
+    """
+    page = db.query(MetaPage).filter(MetaPage.id == meta_page_id, MetaPage.user_id == user_id).first()
+    if not page:
+        raise ValueError("Page not found or not owned by user")
+    
+    token = decrypt_token(page.access_token_encrypted)
+    
+    # Determine endpoint based on mime type
+    is_video = mime_type.startswith("video/")
+    endpoint = "videos" if is_video else "photos"
+    url = f"{META_GRAPH_BASE}/{page.page_id}/{endpoint}"
+    
+    # Files and data for multipart/form-data
+    # For photos, field is 'source'. For videos, it's 'source' too.
+    # Caption field is 'caption' for photos and 'description' for videos (usually 'message' works for both on some endpoints, but let's be specific)
+    
+    files = {"source": open(media_path, "rb")}
+    data = {"access_token": token}
+    
+    if is_video:
+        data["description"] = message
+    else:
+        data["caption"] = message
+        
+    try:
+        with httpx.Client() as client:
+            resp = client.post(url, data=data, files=files)
+            if not resp.is_success:
+                handle_meta_response(resp, f"Post media ({endpoint})")
+            res_data = resp.json()
+            # Success returns 'id' for photos and 'id' or 'post_id' for videos
+            return res_data.get("id") or res_data.get("post_id")
+    except TokenInvalidError as e:
+        _clear_user_token(db, page.user_id)
+        db.commit()
+        raise ValueError(str(e)) from e
+    except Exception as e:
+        raise ValueError(f"Post media failed: {str(e)}")
+    finally:
+        files["source"].close()

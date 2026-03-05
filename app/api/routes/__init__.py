@@ -1,8 +1,9 @@
-from fastapi import APIRouter
-from app.api.routes import content, users, audit_logs, auth_facebook, meta_pages, scheduled_posts, cron, vce
+from app.api.routes import content, users, audit_logs, auth_facebook, meta_pages, scheduled_posts, cron, vce, auth, media
 
 api_router = APIRouter()
 
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(media.router, prefix="/media", tags=["media"])
 api_router.include_router(content.router, prefix="/content", tags=["content"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])

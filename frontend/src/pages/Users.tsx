@@ -3,17 +3,17 @@ import { useAuth } from '../context/AuthContext';
 import { listUsers, type User } from '../api/users';
 
 export default function Users() {
-  const { userId } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userId === null) return;
-    listUsers(userId)
+    if (!isAuthenticated) return;
+    listUsers()
       .then(setUsers)
       .catch(() => setUsers([]))
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [isAuthenticated]);
 
   return (
     <div>

@@ -5,7 +5,7 @@ import { getPostingPreference, updatePostingPreference } from '../api/scheduledP
 import { apiUrl } from '../api/client';
 
 export default function MetaPages() {
-  const { userId } = useAuth();
+  const { token } = useAuth();
   const [pages, setPages] = useState<MetaPage[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncLoading, setSyncLoading] = useState(false);
@@ -18,27 +18,29 @@ export default function MetaPages() {
   const [prefLoading, setPrefLoading] = useState(false);
 
   useEffect(() => {
-    if (userId === null) return;
+    if (!token) return;
     setLoading(true);
-    listPages(userId)
+    listPages()
       .then(setPages)
       .catch(() => setPages([]))
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [token]);
 
   function handleConnectFacebook() {
-    if (userId === null) return;
-    const url = apiUrl('auth/facebook/login', { user_id: userId });
+    if (!token) return;
+    // We pass the token as a query param for the redirect route since window.location.href can't send headers.
+    // The backend will need to handle this.
+    const url = apiUrl('auth/facebook/login', { token });
     window.location.href = url.startsWith('http') ? url : `${window.location.origin}${url}`;
   }
 
   async function handleSync() {
-    if (userId === null) return;
+    if (!token) return;
     setSyncLoading(true);
     setMessage(null);
     try {
-      const res = await syncPages(userId);
-      setPages(await listPages(userId));
+      const res = await syncPages();
+      setPages(await listPages());
       setMessage({ type: 'success', text: `Synced ${res.synced} page(s).` });
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Sync failed.' });
@@ -48,11 +50,11 @@ export default function MetaPages() {
   }
 
   async function openSettings(page: MetaPage) {
-    if (userId === null) return;
+    if (!token) return;
     setEditingPage(page);
     setPrefLoading(true);
     try {
-      const pref = await getPostingPreference(userId, page.id);
+      const pref = await getPostingPreference(page.id);
       setCooldown(pref.cooldown_minutes);
       setMaxPosts(pref.max_posts_per_day);
     } catch (e) {
@@ -66,10 +68,10 @@ export default function MetaPages() {
 
   async function saveSettings(e: React.FormEvent) {
     e.preventDefault();
-    if (userId === null || !editingPage) return;
+    if (!token || !editingPage) return;
     setPrefLoading(true);
     try {
-      await updatePostingPreference(userId, editingPage.id, {
+      await updatePostingPreference(editingPage.id, {
         cooldown_minutes: cooldown,
         max_posts_per_day: maxPosts,
       });
@@ -88,17 +90,15 @@ export default function MetaPages() {
   const [recLoading, setRecLoading] = useState(false);
 
   async function openRecommendations(page: MetaPage) {
-    if (userId === null) return;
+    if (!token) return;
     setRecPage(page);
     setRecLoading(true);
     try {
-      // Direct fetch to keep it simple without adding to api client file if not needed, or add to api client.
-      // Let's assume we add it to api client or use apiFetch directly.
-      // Using apiFetch directly since I don't want to edit another file just for this if possible,
-      // but cleaner to use client. Let's use apiFetch import from earlier if available or import it.
-      // I imported apiUrl, let's look at imports.
-      // I need to import apiFetch.
-      const res = await fetch(apiUrl(`meta/pages/${page.id}/recommendations`, { user_id: userId }));
+      const res = await fetch(apiUrl(`meta/pages/${page.id}/recommendations`), {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         setRecommendations(await res.json());
       } else {

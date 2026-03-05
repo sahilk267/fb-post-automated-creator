@@ -28,6 +28,7 @@ class ContentService:
             created_by_id=user_id,
             schedule_at=getattr(content_data, "schedule_at", None),
             schedule_meta_page_id=getattr(content_data, "schedule_meta_page_id", None),
+            media_id=getattr(content_data, "media_id", None),
         )
         self.db.add(content)
         # Flush to get content.id for audit log

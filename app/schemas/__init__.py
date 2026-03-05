@@ -16,6 +16,8 @@ from app.schemas.vce import (
     SuggestedTemplateResponse,
 )
 
+from app.schemas.media import MediaResponse
+
 __all__ = [
     "ContentCreate",
     "ContentUpdate",
@@ -23,6 +25,7 @@ __all__ = [
     "ContentApprovalRequest",
     "UserCreate",
     "UserResponse",
+    "MediaResponse",
     "AuditLogResponse",
     "MetaPageResponse",
     "ScheduledPostCreate",

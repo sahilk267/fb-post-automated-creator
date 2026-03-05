@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # Celery (optional) – background task queue for scheduled Facebook posts
     celery_broker_url: str = "redis://localhost:6379/0"
 
+    # Security
+    secret_key: str = "supersecretkeychangeinproduction"  # In production, set this via env
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
     class Config:
         env_file = ".env"
         case_sensitive = False

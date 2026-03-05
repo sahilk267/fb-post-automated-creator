@@ -4,9 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { createContent, updateContent, getContent } from '../api/content';
 import { getCategories, generateThemes, type ContentCategory } from '../api/vce';
 import { listPages, type MetaPage } from '../api/metaPages';
+import { uploadMedia } from '../api/media';
 
 export default function ContentForm() {
-  const { userId } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = id != null;
@@ -28,29 +29,42 @@ export default function ContentForm() {
   const [schedulePageId, setSchedulePageId] = useState<number | ''>('');
   const [pages, setPages] = useState<MetaPage[]>([]);
 
+  // Media state
+  const [mediaId, setMediaId] = useState<number | null>(null);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   useEffect(() => {
-    if (!isEdit || userId === null || !id) return;
-    getContent(userId, parseInt(id, 10))
-      .then((c) => { setTitle(c.title); setBody(c.body); setLoaded(true); })
+    if (!isEdit || !isAuthenticated || !id) return;
+    getContent(parseInt(id, 10))
+      .then((c) => {
+        setTitle(c.title);
+        setBody(c.body);
+        setMediaId(c.media_id || null);
+        // If content has media_id, we should ideally fetch its URL if not provided by response
+        // In our case ContentResponse includes media_id, but maybe not the URL yet? 
+        // Our backend ContentResponse schema shows media_id: Optional[int].
+        setLoaded(true);
+      })
       .catch(() => { setError('Content not found'); setLoaded(true); });
-  }, [isEdit, userId, id]);
+  }, [isEdit, isAuthenticated, id]);
 
   // Load categories and pages when creating new content
   useEffect(() => {
-    if (isEdit || userId === null) return;
-    getCategories(userId).then(setCategories).catch(() => setCategories([]));
-    listPages(userId).then(setPages).catch(() => setPages([]));
-  }, [isEdit, userId]);
+    if (isEdit || !isAuthenticated) return;
+    getCategories().then(setCategories).catch(() => setCategories([]));
+    listPages().then(setPages).catch(() => setPages([]));
+  }, [isEdit, isAuthenticated]);
 
   // Auto-generate themes when category is selected (new content only)
   useEffect(() => {
-    if (isEdit || userId === null || !selectedCategory) {
+    if (isEdit || !isAuthenticated || !selectedCategory) {
       setThemes([]);
       return;
     }
     setThemeError('');
     setThemesLoading(true);
-    generateThemes(userId, { category_id: selectedCategory.id, count: 8 })
+    generateThemes({ category_id: selectedCategory.id, count: 8 })
       .then((res) => {
         if (res.available && res.themes.length) setThemes(res.themes);
         else if (!res.available) setThemeError('Theme generation not configured (add GEMINI_API_KEY).');
@@ -58,29 +72,50 @@ export default function ContentForm() {
       })
       .catch(() => setThemeError('Could not generate themes.'))
       .finally(() => setThemesLoading(false));
-  }, [isEdit, userId, selectedCategory?.id]);
+  }, [isEdit, isAuthenticated, selectedCategory?.id]);
 
   function loadThemeIntoForm(theme: string) {
     setTitle(theme);
     setBody(`Expand on: ${theme}\n\n`);
   }
 
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+    try {
+      const res = await uploadMedia(file);
+      setMediaId(res.id);
+      setMediaUrl(res.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (userId === null) return;
+    if (!isAuthenticated) return;
     setError('');
     setLoading(true);
     try {
       if (isEdit && id) {
-        await updateContent(userId, parseInt(id, 10), { title, body });
+        await updateContent(parseInt(id, 10), { title, body, media_id: mediaId });
         navigate(`/content/${id}`, { replace: true });
       } else {
-        const payload: { title: string; body: string; schedule_at?: string; schedule_meta_page_id?: number } = { title, body };
+        const payload: { title: string; body: string; schedule_at?: string; schedule_meta_page_id?: number; media_id?: number | null } = {
+          title,
+          body,
+          media_id: mediaId
+        };
         if (scheduleAt && schedulePageId !== '') {
           payload.schedule_at = new Date(scheduleAt).toISOString();
           payload.schedule_meta_page_id = schedulePageId;
         }
-        const created = await createContent(userId, payload);
+        const created = await createContent(payload);
         navigate(`/content/${created.id}`, { replace: true });
       }
     } catch (err) {
@@ -200,6 +235,45 @@ export default function ContentForm() {
             rows={6}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+
+        <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+          <label className="block text-sm font-medium text-slate-700">Attach Media (Image or Video)</label>
+          <div className="flex items-center gap-4">
+            <input
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileChange}
+              className="hidden"
+              id="media-upload"
+              disabled={uploading}
+            />
+            <label
+              htmlFor="media-upload"
+              className={`cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 ${uploading ? 'opacity-50' : ''}`}
+            >
+              {uploading ? 'Uploading...' : 'Choose File'}
+            </label>
+            {mediaId && <span className="text-xs text-green-600 font-medium">File attached (ID: {mediaId})</span>}
+          </div>
+          {mediaUrl && (
+            <div className="mt-2 relative w-full max-w-sm rounded-lg overflow-hidden border border-slate-300 aspect-video bg-slate-200">
+              {mediaUrl.match(/\.(mp4|webm|ogg)$/) ? (
+                <video src={mediaUrl} controls className="w-full h-full object-contain" />
+              ) : (
+                <img src={mediaUrl} alt="Preview" className="w-full h-full object-contain" />
+              )}
+              <button
+                type="button"
+                onClick={() => { setMediaId(null); setMediaUrl(null); }}
+                className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <button

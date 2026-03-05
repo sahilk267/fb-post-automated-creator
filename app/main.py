@@ -172,6 +172,13 @@ async def health_check():
 
 # Optional: serve frontend (when frontend/dist exists, e.g. after npm run build)
 _frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+# Media storage static mount
+MEDIA_DIR = "/app/data/media"
+if not Path(MEDIA_DIR).exists():
+    Path(MEDIA_DIR).mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
 if _frontend_dist.is_dir():
     app.mount("/assets", StaticFiles(directory=_frontend_dist / "assets"), name="assets")
 

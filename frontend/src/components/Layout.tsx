@@ -1,22 +1,17 @@
-import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
+import { Link, useLocation, Outlet, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEffect } from 'react';
-import { getMe } from '../api/users';
 
 export default function Layout() {
-  const { userId, user, setUser, logout } = useAuth();
+  const { isAuthenticated, user, logout, isLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (userId && !user) {
-      getMe(userId)
-        .then(setUser)
-        .catch(() => logout());
-    }
-  }, [userId, user, setUser, logout]);
+  // Redirect if not authenticated (handled by RequireAuth, but safe for layout)
+  if (!isAuthenticated && location.pathname !== '/login' && location.pathname !== '/signup') {
+    return <Navigate to="/login" replace />;
+  }
 
-  if (userId && !user) {
+  if (isAuthenticated && !user && isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-slate-500">Loading...</p>
@@ -33,7 +28,7 @@ export default function Layout() {
           <Link to="/" className="font-semibold text-lg tracking-tight">
             Content Platform
           </Link>
-          {!isLogin && (
+          {!isLogin && location.pathname !== '/signup' && (
             <nav className="flex items-center gap-4">
               <Link to="/" className="hover:text-slate-300">Dashboard</Link>
               <Link to="/content" className="hover:text-slate-300">Content</Link>
@@ -45,7 +40,7 @@ export default function Layout() {
                 </>
               )}
               <span className="text-slate-400 text-sm">
-                {user ? `${user.username}${user.is_admin ? ' (Admin)' : ''}` : `User #${userId}`}
+                {user ? `${user.username}${user.is_admin ? ' (Admin)' : ''}` : 'Loading...'}
               </span>
               <button
                 type="button"

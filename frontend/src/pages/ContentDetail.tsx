@@ -5,7 +5,7 @@ import { getContent, submitForApproval, approveContent, deleteContent, publishTo
 import { listPages, type MetaPage } from '../api/metaPages';
 
 export default function ContentDetail() {
-  const { userId } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [content, setContent] = useState<Content | null>(null);
@@ -17,21 +17,21 @@ export default function ContentDetail() {
   const [publishLoading, setPublishLoading] = useState(false);
 
   useEffect(() => {
-    if (userId === null || !id) return;
-    getContent(userId, parseInt(id, 10)).then(setContent).catch(() => setError('Content not found'));
-  }, [userId, id]);
+    if (!isAuthenticated || !id) return;
+    getContent(parseInt(id, 10)).then(setContent).catch(() => setError('Content not found'));
+  }, [isAuthenticated, id]);
 
   useEffect(() => {
-    if (userId === null) return;
-    listPages(userId).then(setPages).catch(() => setPages([]));
-  }, [userId]);
+    if (!isAuthenticated) return;
+    listPages().then(setPages).catch(() => setPages([]));
+  }, [isAuthenticated]);
 
   async function handleSubmit() {
-    if (userId === null || !id || !content) return;
+    if (!isAuthenticated || !id || !content) return;
     setLoading(true);
     setError('');
     try {
-      const updated = await submitForApproval(userId, parseInt(id, 10));
+      const updated = await submitForApproval(parseInt(id, 10));
       setContent(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit');
@@ -41,11 +41,11 @@ export default function ContentDetail() {
   }
 
   async function handleApprove(approved: boolean) {
-    if (userId === null || !id || !content) return;
+    if (!isAuthenticated || !id || !content) return;
     setLoading(true);
     setError('');
     try {
-      const updated = await approveContent(userId, parseInt(id, 10), { approved, comment: approveComment || undefined });
+      const updated = await approveContent(parseInt(id, 10), { approved, comment: approveComment || undefined });
       setContent(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
@@ -55,12 +55,12 @@ export default function ContentDetail() {
   }
 
   async function handleDelete() {
-    if (userId === null || !id || !content) return;
+    if (!isAuthenticated || !id || !content) return;
     if (!window.confirm('Delete this content?')) return;
     setLoading(true);
     setError('');
     try {
-      await deleteContent(userId, parseInt(id, 10));
+      await deleteContent(parseInt(id, 10));
       navigate('/content', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');
@@ -70,11 +70,11 @@ export default function ContentDetail() {
   }
 
   async function handlePublishToFacebook() {
-    if (userId === null || !id || !content || selectedPageId === '') return;
+    if (!isAuthenticated || !id || !content || selectedPageId === '') return;
     setPublishLoading(true);
     setError('');
     try {
-      const updated = await publishToFacebook(userId, parseInt(id, 10), selectedPageId);
+      const updated = await publishToFacebook(parseInt(id, 10), selectedPageId);
       setContent(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to publish to Facebook');
@@ -109,8 +109,17 @@ export default function ContentDetail() {
       </div>
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-        <p className="text-slate-700 whitespace-pre-wrap">{content.body}</p>
-        <p className="text-slate-400 text-sm mt-4">
+        <p className="text-slate-700 whitespace-pre-wrap mb-4">{content.body}</p>
+        {content.media && (
+          <div className="mb-4 rounded-lg overflow-hidden border border-slate-200 max-w-xl bg-slate-50">
+            {content.media.mime_type.startsWith('video/') ? (
+              <video src={content.media.url} controls className="w-full h-auto" />
+            ) : (
+              <img src={content.media.url} alt="Attached media" className="w-full h-auto" />
+            )}
+          </div>
+        )}
+        <p className="text-slate-400 text-sm">
           Created {new Date(content.created_at).toLocaleString()}
           {content.approved_at && ' · Approved ' + new Date(content.approved_at).toLocaleString()}
           {content.fb_status === 'posted' && content.fb_post_id && ' · Published to Facebook'}

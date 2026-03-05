@@ -47,7 +47,18 @@ def publish_to_facebook(
     message = f"{content.title}\n\n{content.body}"
 
     try:
-        fb_post_id = post_to_page_and_get_id(db, meta_page_id, user_id, message)
+        if content.media_id:
+            from app.services.facebook_pages_service import post_media_to_page_and_get_id
+            fb_post_id = post_media_to_page_and_get_id(
+                db, 
+                meta_page_id, 
+                user_id, 
+                message, 
+                content.media.stored_path, 
+                content.media.mime_type
+            )
+        else:
+            fb_post_id = post_to_page_and_get_id(db, meta_page_id, user_id, message)
     except TokenInvalidError:
         # Token expired/invalid; caller may prompt user to reconnect
         content.fb_status = "failed"

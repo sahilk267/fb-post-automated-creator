@@ -11,10 +11,10 @@ export interface User {
   updated_at: string | null;
 }
 
-export function getMe(userId: number): Promise<User> {
-  return apiGet<User>('users/me', userId);
+export function getMe(): Promise<User> {
+  return apiGet<User>('users/me');
 }
 
-export function listUsers(userId: number): Promise<User[]> {
-  return apiGet<User[]>('users/', userId);
+export function listUsers(): Promise<User[]> {
+  return apiGet<User[]>('users/');
 }
