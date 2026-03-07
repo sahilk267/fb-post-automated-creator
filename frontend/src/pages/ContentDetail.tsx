@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getContent, submitForApproval, approveContent, deleteContent, publishToFacebook, type Content } from '../api/content';
+import { getContent, submitForApproval, approveContent, deleteContent, publishToFacebook, publishToLinkedIn, type Content } from '../api/content';
 import { listPages, type MetaPage } from '../api/metaPages';
+import { listLinkedInAccounts, type LinkedInAccount } from '../api/platforms';
 
 export default function ContentDetail() {
   const { isAuthenticated } = useAuth();
@@ -13,8 +14,11 @@ export default function ContentDetail() {
   const [loading, setLoading] = useState(false);
   const [approveComment, setApproveComment] = useState('');
   const [pages, setPages] = useState<MetaPage[]>([]);
-  const [selectedPageId, setSelectedPageId] = useState<number | ''>('');
+  const [selectedPageIds, setSelectedPageIds] = useState<number[]>([]);
+  const [linkedinAccounts, setLinkedinAccounts] = useState<LinkedInAccount[]>([]);
+  const [selectedLinkedInIds, setSelectedLinkedInIds] = useState<number[]>([]);
   const [publishLoading, setPublishLoading] = useState(false);
+  const [publishLinkedInLoading, setPublishLinkedInLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || !id) return;
@@ -24,6 +28,7 @@ export default function ContentDetail() {
   useEffect(() => {
     if (!isAuthenticated) return;
     listPages().then(setPages).catch(() => setPages([]));
+    listLinkedInAccounts().then(setLinkedinAccounts).catch(() => setLinkedinAccounts([]));
   }, [isAuthenticated]);
 
   async function handleSubmit() {
@@ -70,16 +75,30 @@ export default function ContentDetail() {
   }
 
   async function handlePublishToFacebook() {
-    if (!isAuthenticated || !id || !content || selectedPageId === '') return;
+    if (!isAuthenticated || !id || !content || selectedPageIds.length === 0) return;
     setPublishLoading(true);
     setError('');
     try {
-      const updated = await publishToFacebook(parseInt(id, 10), selectedPageId);
+      const updated = await publishToFacebook(parseInt(id, 10), selectedPageIds);
       setContent(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to publish to Facebook');
     } finally {
       setPublishLoading(false);
+    }
+  }
+
+  async function handlePublishToLinkedIn() {
+    if (!isAuthenticated || !id || !content || selectedLinkedInIds.length === 0) return;
+    setPublishLinkedInLoading(true);
+    setError('');
+    try {
+      const updated = await publishToLinkedIn(parseInt(id, 10), selectedLinkedInIds);
+      setContent(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to publish to LinkedIn');
+    } finally {
+      setPublishLinkedInLoading(false);
     }
   }
 
@@ -122,8 +141,7 @@ export default function ContentDetail() {
         <p className="text-slate-400 text-sm">
           Created {new Date(content.created_at).toLocaleString()}
           {content.approved_at && ' · Approved ' + new Date(content.approved_at).toLocaleString()}
-          {content.fb_status === 'posted' && content.fb_post_id && ' · Published to Facebook'}
-          {content.fb_status === 'failed' && ' · Facebook publish failed'}
+          {content.publish_statuses?.length > 0 && ` · Published to ${content.publish_statuses.filter(s => s.status === 'posted').length} targets`}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -150,40 +168,88 @@ export default function ContentDetail() {
           </>
         )}
       </div>
-      <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-200">
-        <h2 className="text-sm font-semibold text-slate-800 mb-2">Publish to Facebook</h2>
-        {content.status !== 'approved' ? (
-          <p className="text-slate-500 text-sm">Content must be <strong>Approved</strong> before it can be published.</p>
-        ) : (
-          <>
-            <p className="text-slate-600 text-sm mb-2">Choose a Page and publish this content. Connect Facebook and sync pages first from <Link to="/meta-pages" className="text-indigo-600 hover:underline">Facebook Pages</Link>.</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={selectedPageId}
-                onChange={(e) => setSelectedPageId(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm min-w-[200px]"
-              >
-                <option value="">Select a page...</option>
-                {pages.map((p) => (
-                  <option key={p.id} value={p.id}>{p.page_name || p.page_id}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handlePublishToFacebook}
-                disabled={publishLoading || selectedPageId === '' || pages.length === 0}
-                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {publishLoading ? 'Publishing...' : 'Publish to Facebook'}
-              </button>
-            </div>
-            {pages.length === 0 && (
-              <p className="text-amber-700 text-sm mt-1">
-                No pages. <Link to="/meta-pages" className="font-medium underline hover:no-underline">Connect Facebook and sync pages</Link> first.
-              </p>
-            )}
-          </>
-        )}
+      <div className="grid md:grid-cols-2 gap-6 mt-6">
+        {/* Facebook Section */}
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <h2 className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px]">FB</span>
+            Publish to Facebook
+          </h2>
+          {content.status !== 'approved' ? (
+            <p className="text-slate-500 text-sm">Content must be <strong>Approved</strong> first.</p>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 max-h-32 overflow-y-auto w-full p-2 border border-slate-200 rounded-lg bg-white">
+                  {pages.map((p) => (
+                    <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedPageIds.includes(p.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedPageIds([...selectedPageIds, p.id]);
+                          else setSelectedPageIds(selectedPageIds.filter(idStr => idStr !== p.id));
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                      {p.page_name || p.page_id}
+                    </label>
+                  ))}
+                  {pages.length === 0 && <p className="text-slate-400 text-xs italic">No pages found.</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePublishToFacebook}
+                  disabled={publishLoading || selectedPageIds.length === 0 || pages.length === 0}
+                  className="w-full rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {publishLoading ? 'Publishing...' : 'Publish to Facebook'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* LinkedIn Section */}
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <h2 className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <span className="w-5 h-5 bg-blue-800 text-white rounded-full flex items-center justify-center text-[10px]">IN</span>
+            Publish to LinkedIn
+          </h2>
+          {content.status !== 'approved' ? (
+            <p className="text-slate-500 text-sm">Content must be <strong>Approved</strong> first.</p>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 max-h-32 overflow-y-auto w-full p-2 border border-slate-200 rounded-lg bg-white">
+                  {linkedinAccounts.map((acc) => (
+                    <label key={acc.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedLinkedInIds.includes(acc.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedLinkedInIds([...selectedLinkedInIds, acc.id]);
+                          else setSelectedLinkedInIds(selectedLinkedInIds.filter(id => id !== acc.id));
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                      {acc.name}
+                    </label>
+                  ))}
+                  {linkedinAccounts.length === 0 && <p className="text-slate-400 text-xs italic">No LinkedIn accounts found.</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePublishToLinkedIn}
+                  disabled={publishLinkedInLoading || selectedLinkedInIds.length === 0 || linkedinAccounts.length === 0}
+                  className="w-full rounded-lg bg-blue-800 text-white px-4 py-2 text-sm font-medium hover:bg-blue-900 disabled:opacity-50"
+                >
+                  {publishLinkedInLoading ? 'Publishing...' : 'Publish to LinkedIn'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

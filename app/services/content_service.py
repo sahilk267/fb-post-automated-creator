@@ -14,6 +14,18 @@ class ContentService:
     def __init__(self, db: Session):
         self.db = db
         self.audit = AuditService()
+
+    def _verify_org_access(self, user_id: int, org_id: Optional[int]):
+        """Verify that user has access to the organization if specified."""
+        if org_id is None:
+            return  # Content without organization remains private to user
+        from app.models.organization import OrganizationMember
+        exists = self.db.query(OrganizationMember).filter(
+            OrganizationMember.organization_id == org_id,
+            OrganizationMember.user_id == user_id
+        ).first()
+        if not exists:
+            raise ValueError(f"User does not have access to organization {org_id}")
     
     def create_content(self, content_data: ContentCreate, user_id: int) -> Content:
         """
@@ -21,10 +33,14 @@ class ContentService:
         
         Creates content and audit log in single atomic transaction.
         """
+        if content_data.organization_id:
+            self._verify_org_access(user_id, content_data.organization_id)
+            
         content = Content(
             title=content_data.title,
             body=content_data.body,
             status=ContentStatus.DRAFT,
+            organization_id=content_data.organization_id,
             created_by_id=user_id,
             schedule_at=getattr(content_data, "schedule_at", None),
             schedule_meta_page_id=getattr(content_data, "schedule_meta_page_id", None),
@@ -60,15 +76,21 @@ class ContentService:
         skip: int = 0,
         limit: int = 100,
         status: Optional[ContentStatus] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        organization_id: Optional[int] = None
     ) -> List[Content]:
         """List content with optional filters."""
         query = self.db.query(Content)
         
+        if organization_id:
+            query = query.filter(Content.organization_id == organization_id)
+        elif user_id:
+            # If no org is specified, non-admins see their private content + content in orgs they belong to
+            # But for simplicity, we'll follow a "Workspace" approach where the client MUST specify org_id or 'personal'
+            query = query.filter(Content.created_by_id == user_id)
+            
         if status:
             query = query.filter(Content.status == status)
-        if user_id:
-            query = query.filter(Content.created_by_id == user_id)
         
         return query.offset(skip).limit(limit).all()
     

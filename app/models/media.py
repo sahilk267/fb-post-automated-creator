@@ -18,7 +18,10 @@ class Media(Base):
     file_size = Column(Integer, nullable=False)
     
     # Ownership
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    
+    organization = relationship("Organization", backref="media_assets")
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())

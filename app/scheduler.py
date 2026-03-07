@@ -103,7 +103,7 @@ def publish_to_facebook_task(self, scheduled_post_id: int):
             publish_to_facebook(
                 db=db,
                 content_id=sp.content_id,
-                meta_page_id=sp.meta_page_id,
+                meta_page_ids=[sp.meta_page_id],
                 user_id=sp.meta_page.user_id,
             )
             
@@ -165,11 +165,16 @@ def token_guard_task():
                 )
             elif expires_at < warning_threshold:
                 results["warning"] += 1
-                AuditService.log_action(
-                    db, "token.warning", "user", t.user_id, t.user_id,
-                    f"Meta access token for user {t.user_id} expires soon.",
-                    {"expires_at": expires_at.isoformat()}
-                )
+                from app.services.facebook_oauth_service import refresh_long_lived_token
+                # Attempt to refresh
+                refreshed = refresh_long_lived_token(db, t)
+                if not refreshed:
+                    # If refresh failed, still log warning for manual intervention
+                    AuditService.log_action(
+                        db, "token.warning", "user", t.user_id, t.user_id,
+                        f"Meta access token for user {t.user_id} expires soon and auto-refresh failed.",
+                        {"expires_at": expires_at.isoformat()}
+                    )
         
         db.commit()
         return results

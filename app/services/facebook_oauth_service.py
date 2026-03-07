@@ -148,3 +148,52 @@ def disconnect_facebook(db: Session, user_id: int) -> bool:
         )
     db.commit()
     return had_token
+def refresh_long_lived_token(db: Session, user_token: MetaUserToken) -> bool:
+    """
+    Refresh a long-lived Meta token.
+    Long-lived tokens can be refreshed once per day if they are still valid.
+    Returns True if refreshed, False otherwise.
+    """
+    from app.core.token_crypto import decrypt_token
+    
+    app_id = settings.facebook_app_id
+    app_secret = settings.facebook_app_secret
+    if not app_id or not app_secret:
+        return False
+        
+    current_token = decrypt_token(user_token.access_token_encrypted)
+    
+    params = {
+        "grant_type": "fb_exchange_token",
+        "client_id": app_id,
+        "client_secret": app_secret,
+        "fb_exchange_token": current_token,
+    }
+    
+    try:
+        with httpx.Client() as client:
+            resp = client.get(META_LONG_LIVED_TOKEN, params=params)
+            if resp.is_success:
+                data = resp.json()
+                new_token = data.get("access_token")
+                expires_in = data.get("expires_in")
+                
+                if new_token:
+                    user_token.access_token_encrypted = encrypt_token(new_token)
+                    if expires_in:
+                        user_token.expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+                    db.commit()
+                    
+                    AuditService.log_action(
+                        db, "token.refreshed", "user", user_token.user_id, user_token.user_id,
+                        f"Meta access token for user {user_token.user_id} was automatically refreshed."
+                    )
+                    return True
+    except Exception as e:
+        # Log failure but don't crash the task
+        AuditService.log_action(
+            db, "token.refresh_failed", "user", user_token.user_id, user_token.user_id,
+            f"Failed to auto-refresh Meta token: {str(e)}"
+        )
+        
+    return False

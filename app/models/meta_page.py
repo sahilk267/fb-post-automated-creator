@@ -11,6 +11,7 @@ class MetaPage(Base):
     __tablename__ = "meta_pages"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     page_id = Column(String(64), nullable=False, index=True)  # Meta Page ID
     page_name = Column(String(255), nullable=True)

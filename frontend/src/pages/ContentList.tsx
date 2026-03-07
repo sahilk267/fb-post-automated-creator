@@ -1,22 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
 import { listContent, type Content } from '../api/content';
 
 export default function ContentList() {
   const { isAuthenticated } = useAuth();
+  const { currentOrg } = useOrg();
   const [content, setContent] = useState<Content[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const params = statusFilter ? { limit: 100, status: statusFilter } : { limit: 100 };
+    const params = {
+      limit: 100,
+      status: statusFilter || undefined,
+      organization_id: currentOrg?.id
+    };
     listContent(params)
       .then(setContent)
       .catch(() => setContent([]))
       .finally(() => setLoading(false));
-  }, [isAuthenticated, statusFilter]);
+  }, [isAuthenticated, statusFilter, currentOrg]);
 
   return (
     <div>

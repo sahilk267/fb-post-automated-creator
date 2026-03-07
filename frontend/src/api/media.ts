@@ -10,11 +10,14 @@ export interface Media {
     url: string;
 }
 
-export function uploadMedia(file: File): Promise<Media> {
+export async function uploadMedia(file: File, organizationId?: number): Promise<Media> {
     const formData = new FormData();
     formData.append('file', file);
+    if (organizationId) {
+        formData.append('organization_id', organizationId.toString());
+    }
 
-    return apiPost<Media>('media/upload', formData);
+    return apiPost<Media>('media/upload', formData, organizationId ? { organization_id: organizationId } : {});
 }
 
 export function listMedia(): Promise<Media[]> {

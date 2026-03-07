@@ -1,8 +1,11 @@
 import { Link, useLocation, Outlet, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
+import OrganizationSwitcher from './OrganizationSwitcher';
 
 export default function Layout() {
   const { isAuthenticated, user, logout, isLoading } = useAuth();
+  const { isPro, isAgency } = useOrg();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -22,40 +25,74 @@ export default function Layout() {
   const isLogin = location.pathname === '/login';
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-slate-900 text-white shadow">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="font-semibold text-lg tracking-tight">
-            Content Platform
-          </Link>
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-8">
+          <div className="flex items-center gap-6 flex-1">
+            <Link to="/" className="font-black text-xl tracking-tighter text-slate-900 flex items-center gap-2 flex-shrink-0">
+              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              </div>
+              <span className="hidden sm:inline">AUTOGROWTH</span>
+            </Link>
+
+            {!isLogin && location.pathname !== '/signup' && (
+              <div className="max-w-xs w-full hidden md:block">
+                <OrganizationSwitcher />
+              </div>
+            )}
+          </div>
           {!isLogin && location.pathname !== '/signup' && (
-            <nav className="flex items-center gap-4">
-              <Link to="/" className="hover:text-slate-300">Dashboard</Link>
-              <Link to="/calendar" className="hover:text-slate-300">Calendar</Link>
-              <Link to="/content" className="hover:text-slate-300">Content</Link>
-              <Link to="/insights" className="hover:text-slate-300">Insights</Link>
-              <Link to="/meta-pages" className="hover:text-slate-300">Facebook Pages</Link>
-              {user?.is_admin && (
-                <>
-                  <Link to="/audit-logs" className="hover:text-slate-300">Audit Logs</Link>
-                  <Link to="/users" className="hover:text-slate-300">Users</Link>
-                </>
-              )}
-              <span className="text-slate-400 text-sm">
-                {user ? `${user.username}${user.is_admin ? ' (Admin)' : ''}` : 'Loading...'}
-              </span>
-              <button
-                type="button"
-                onClick={() => { logout(); navigate('/login'); }}
-                className="text-slate-400 hover:text-white text-sm"
-              >
-                Logout
-              </button>
+            <nav className="flex items-center gap-1">
+              {[
+                { to: '/', label: 'DASHBOARD' },
+                { to: '/calendar', label: 'SCHEDULER' },
+                { to: '/content', label: 'PRODUCTION' },
+                { to: '/insights', label: 'ANALYTICS' },
+                { to: '/platforms', label: 'NETWORK' },
+                { to: '/organizations', label: 'WORKSPACE' },
+                { to: '/billing', label: 'BILLING' }
+              ].map(link => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${location.pathname === link.to || (link.to !== '/' && location.pathname.startsWith(link.to))
+                    ? 'bg-indigo-50 text-indigo-700 shadow-sm'
+                    : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                    }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+
+              <div className="h-6 w-px bg-slate-200 mx-2"></div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                  <span className="text-[10px] font-black text-slate-900 leading-none">
+                    {user?.username.toUpperCase()}
+                  </span>
+                  <span className={`text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded ${isAgency ? 'bg-amber-100 text-amber-700' :
+                    isPro ? 'bg-indigo-100 text-indigo-700' :
+                      'bg-slate-100 text-slate-400'
+                    }`}>
+                    {isAgency ? 'AGENCY' : isPro ? 'PRO' : 'FREE'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { logout(); navigate('/login'); }}
+                  className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                  title="Logout"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </button>
+              </div>
             </nav>
           )}
         </div>
       </header>
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
         <Outlet />
       </main>
     </div>

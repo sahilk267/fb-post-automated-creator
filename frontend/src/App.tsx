@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { OrgProvider } from './context/OrgContext'; // Added OrgProvider import
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -12,6 +13,9 @@ import Users from './pages/Users';
 import Insights from './pages/Insights';
 import Calendar from './pages/Calendar';
 import Signup from './pages/Signup';
+import Platforms from './pages/Platforms';
+import Organizations from './pages/Organizations';
+import Billing from './pages/Billing';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -24,17 +28,27 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
-      <Route path="/" element={<Layout />}>
-        <Route index element={<RequireAuth><Dashboard /></RequireAuth>} />
-        <Route path="content" element={<RequireAuth><ContentList /></RequireAuth>} />
-        <Route path="content/new" element={<RequireAuth><ContentForm /></RequireAuth>} />
-        <Route path="content/:id" element={<RequireAuth><ContentDetail /></RequireAuth>} />
-        <Route path="content/:id/edit" element={<RequireAuth><ContentForm /></RequireAuth>} />
-        <Route path="meta-pages" element={<RequireAuth><MetaPages /></RequireAuth>} />
-        <Route path="audit-logs" element={<RequireAuth><AuditLogs /></RequireAuth>} />
-        <Route path="users" element={<RequireAuth><Users /></RequireAuth>} />
-        <Route path="insights" element={<RequireAuth><Insights /></RequireAuth>} />
-        <Route path="calendar" element={<RequireAuth><Calendar /></RequireAuth>} />
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="content" element={<ContentList />} />
+        <Route path="content/new" element={<ContentForm />} />
+        <Route path="content/:id" element={<ContentDetail />} />
+        <Route path="content/:id/edit" element={<ContentForm />} />
+        <Route path="meta-pages" element={<MetaPages />} />
+        <Route path="platforms" element={<Platforms />} />
+        <Route path="organizations" element={<Organizations />} />
+        <Route path="audit-logs" element={<AuditLogs />} />
+        <Route path="users" element={<Users />} />
+        <Route path="insights" element={<Insights />} />
+        <Route path="calendar" element={<Calendar />} />
+        <Route path="billing" element={<Billing />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -45,7 +59,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <OrgProvider>
+          <AppRoutes />
+        </OrgProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # Gemini API (optional) – for AI-generated content themes
     gemini_api_key: Optional[str] = None  # Get from https://aistudio.google.com/apikey
 
+    # LinkedIn OAuth (Phase 6)
+    linkedin_client_id: Optional[str] = None
+    linkedin_client_secret: Optional[str] = None
+    linkedin_redirect_uri: Optional[str] = None
+
     # Celery (optional) – background task queue for scheduled Facebook posts
     celery_broker_url: str = "redis://localhost:6379/0"
 
@@ -34,6 +39,22 @@ class Settings(BaseSettings):
     secret_key: str = "supersecretkeychangeinproduction"  # In production, set this via env
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
+    # Storage (local, s3, or gdrive)
+    storage_backend: str = "local"  # "local" | "s3" | "gdrive"
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    aws_s3_bucket: Optional[str] = None
+    
+    # Google Drive Storage (Phase 6 Pivot)
+    google_drive_credentials_json: Optional[str] = None  # JSON string or path to JSON
+    google_drive_folder_id: Optional[str] = None
+
+    # Stripe Billing (Phase 6)
+    stripe_api_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    stripe_pro_price_id: Optional[str] = None
+    stripe_agency_price_id: Optional[str] = None
 
     class Config:
         env_file = ".env"

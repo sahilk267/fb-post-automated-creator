@@ -21,10 +21,25 @@ class MediaService:
         if not os.path.exists(MEDIA_DIR):
             os.makedirs(MEDIA_DIR, exist_ok=True)
 
-    def save_upload(self, upload_file: UploadFile, user_id: int) -> Media:
+    def _verify_org_access(self, user_id: int, org_id: Optional[int]):
+        """Verify that user has access to the organization if specified."""
+        if org_id is None:
+            return  # Media without organization remains private to user
+        from app.models.organization import OrganizationMember
+        exists = self.db.query(OrganizationMember).filter(
+            OrganizationMember.organization_id == org_id,
+            OrganizationMember.user_id == user_id
+        ).first()
+        if not exists:
+            raise ValueError(f"User does not have access to organization {org_id}")
+
+    def save_upload(self, upload_file: UploadFile, user_id: int, organization_id: Optional[int] = None) -> Media:
         """
         Save an uploaded file to disk and create a Media record.
         """
+        if organization_id:
+            self._verify_org_access(user_id, organization_id)
+            
         # Create a unique filename to avoid collisions
         ext = os.path.splitext(upload_file.filename)[1]
         unique_filename = f"{uuid.uuid4()}{ext}"
@@ -43,7 +58,8 @@ class MediaService:
             stored_path=stored_path,
             mime_type=upload_file.content_type or "application/octet-stream",
             file_size=file_size,
-            user_id=user_id
+            user_id=user_id,
+            organization_id=organization_id
         )
         self.db.add(media)
         self.db.commit()
@@ -55,9 +71,14 @@ class MediaService:
         """Get media by ID."""
         return self.db.query(Media).filter(Media.id == media_id).first()
 
-    def get_user_media(self, user_id: int) -> list[Media]:
-        """Get all media for a specific user."""
-        return self.db.query(Media).filter(Media.user_id == user_id).all()
+    def list_media(self, user_id: int, organization_id: Optional[int] = None) -> list[Media]:
+        """List media with organization filtering."""
+        query = self.db.query(Media)
+        if organization_id:
+            query = query.filter(Media.organization_id == organization_id)
+        else:
+            query = query.filter(Media.user_id == user_id)
+        return query.all()
 
     @staticmethod
     def get_public_url(media: Media) -> str:

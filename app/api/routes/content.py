@@ -13,10 +13,12 @@ from app.schemas.content import (
     ContentResponse,
     ContentApprovalRequest,
     PublishToFacebookRequest,
+    PublishToLinkedInRequest,
     InsightsResponse,
 )
 from app.services.content_service import ContentService
 from app.services.fb_api import publish_to_facebook
+from app.services.linkedin_api import publish_to_linkedin
 
 router = APIRouter()
 
@@ -27,7 +29,7 @@ def create_content(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create new content."""
+    """Create new content draft."""
     service = ContentService(db)
     try:
         content = service.create_content(content_data, current_user.id)
@@ -36,6 +38,8 @@ def create_content(
             media_service = MediaService(db)
             content.media.url = media_service.get_public_url(content.media)
         return content
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -48,6 +52,7 @@ def list_content(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     status_filter: Optional[str] = Query(None, alias="status"),
+    organization_id: Optional[int] = Query(None, description="Filter by Organization ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -68,13 +73,14 @@ def list_content(
                 detail=f"Invalid status: {status_filter}"
             )
     
-    # Non-admins see only their own content; admins see all
+    # Non-admins see only their own content (if personal) or org content
     filter_user_id = None if current_user.is_admin else current_user.id
     content_list = service.list_content(
         skip=skip,
         limit=limit,
         status=content_status,
         user_id=filter_user_id,
+        organization_id=organization_id,
     )
 
     # Populate media URLs
@@ -197,9 +203,26 @@ def publish_content_to_facebook(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Publish content to a Facebook Page. Updates content with fb_page_id, fb_post_id, fb_status."""
+    """Publish content to multiple Facebook Pages. Updates content publish_statuses."""
     try:
-        content = publish_to_facebook(db, content_id, body.meta_page_id, current_user.id)
+        content = publish_to_facebook(db, content_id, body.meta_page_ids, current_user.id)
+        return content
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+@router.post("/{content_id}/publish-to-linkedin", response_model=ContentResponse)
+def publish_content_to_linkedin(
+    content_id: int,
+    body: PublishToLinkedInRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Publish content to multiple LinkedIn Accounts (Profiles/Pages)."""
+    try:
+        content = publish_to_linkedin(db, content_id, body.linkedin_account_ids, current_user.id)
         return content
     except ValueError as e:
         raise HTTPException(
@@ -233,10 +256,11 @@ def delete_content(
 @router.get("/{content_id}/insights", response_model=InsightsResponse)
 def get_content_insights(
     content_id: int,
+    meta_page_id: int = Query(..., description="The ID of the MetaPage to get insights for"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Fetch insights for a published post."""
+    """Fetch insights for a published post on a specific Meta Page."""
     service = ContentService(db)
     content = service.get_content(content_id)
     if not content:
@@ -245,23 +269,22 @@ def get_content_insights(
             detail="Content not found"
         )
     
-    if content.fb_status != "posted" or not content.fb_post_id:
+    from app.models.content_execution import ContentPublishStatus, PublishStatusEnum
+    publish_status = db.query(ContentPublishStatus).filter(
+        ContentPublishStatus.content_id == content_id,
+        ContentPublishStatus.meta_page_id == meta_page_id,
+        ContentPublishStatus.status == PublishStatusEnum.POSTED
+    ).first()
+    
+    if not publish_status or not publish_status.platform_post_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Content has not been posted to Facebook yet"
-        )
-    
-    from app.models.meta_page import MetaPage
-    page = db.query(MetaPage).filter(MetaPage.page_id == content.fb_page_id, MetaPage.user_id == current_user.id).first()
-    if not page:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meta Page not found for this post"
+            detail="Content has not been posted to this Facebook page yet"
         )
     
     from app.services.facebook_pages_service import get_post_insights
     try:
-        insights = get_post_insights(db, content.fb_post_id, page.id, current_user.id)
+        insights = get_post_insights(db, publish_status.platform_post_id, meta_page_id, current_user.id)
         return insights
     except ValueError as e:
         raise HTTPException(

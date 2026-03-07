@@ -7,8 +7,8 @@ export interface MetaPage {
   category: string | null;
 }
 
-export function listPages(): Promise<MetaPage[]> {
-  return apiGet<MetaPage[]>('meta/pages/');
+export function listPages(organizationId?: number): Promise<MetaPage[]> {
+  return apiGet<MetaPage[]>('meta/pages/', { organization_id: organizationId });
 }
 
 /** Sync pages from Facebook (requires connected account). Returns { synced: number }. */

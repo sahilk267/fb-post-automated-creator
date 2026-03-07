@@ -15,6 +15,7 @@ router = APIRouter()
 @router.post("/upload", response_model=MediaResponse, status_code=status.HTTP_201_CREATED)
 async def upload_media(
     file: UploadFile = File(...),
+    organization_id: Optional[int] = Query(None, description="Optional: organization ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -30,7 +31,7 @@ async def upload_media(
     
     service = MediaService(db)
     try:
-        media = service.save_upload(file, current_user.id)
+        media = service.save_upload(file, current_user.id, organization_id)
         # Add public URL for convenience
         media_response = MediaResponse.from_orm(media)
         media_response.url = service.get_public_url(media)
@@ -44,12 +45,13 @@ async def upload_media(
 
 @router.get("/", response_model=List[MediaResponse])
 def list_user_media(
+    organization_id: Optional[int] = Query(None, description="Filter by Organization ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all media uploaded by the current user."""
+    """List media with optional organization filtering."""
     service = MediaService(db)
-    media_list = service.get_user_media(current_user.id)
+    media_list = service.list_media(current_user.id, organization_id)
     
     # Map to include URLs
     responses = []
@@ -77,7 +79,20 @@ def get_media(
             detail="Media not found"
         )
         
-    if media.user_id != current_user.id and not current_user.is_admin:
+    # Permission check: owner, admin, or member of the media's organization
+    has_access = False
+    if current_user.is_admin or media.user_id == current_user.id:
+        has_access = True
+    elif media.organization_id:
+        from app.models.organization import OrganizationMember
+        exists = db.query(OrganizationMember).filter(
+            OrganizationMember.organization_id == media.organization_id,
+            OrganizationMember.user_id == current_user.id
+        ).first()
+        if exists:
+            has_access = True
+            
+    if not has_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No permission to access this media"
