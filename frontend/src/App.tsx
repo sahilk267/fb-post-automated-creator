@@ -16,6 +16,7 @@ import Signup from './pages/Signup';
 import Platforms from './pages/Platforms';
 import Organizations from './pages/Organizations';
 import Billing from './pages/Billing';
+import SystemSettings from './pages/SystemSettings';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route path="insights" element={<Insights />} />
         <Route path="calendar" element={<Calendar />} />
         <Route path="billing" element={<Billing />} />
+        <Route path="system-settings" element={<SystemSettings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

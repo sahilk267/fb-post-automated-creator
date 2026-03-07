@@ -8,11 +8,11 @@ from fastapi.testclient import TestClient
 # Shared in-memory SQLite so all connections see the same tables (set before app imports)
 os.environ["DATABASE_URL"] = "sqlite:///file:testdb?mode=memory&cache=shared&uri=true"
 
-from app.main import app
-from app.core.database import init_db
-
 # Ensure app package is on path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from app.main import app
+from app.core.database import init_db
 
 
 @pytest.fixture(scope="function")

@@ -110,10 +110,15 @@ class BillingService:
             self.db.commit()
 
     def get_org_limits(self, org: Organization):
-        """Returns feature limits based on organization tier."""
-        tier = org.subscription_tier
-        if tier == SubscriptionTier.AGENCY:
-            return {"max_posts_per_month": 500, "max_members": 20, "ai_optimized": True}
-        if tier == SubscriptionTier.PRO:
-            return {"max_posts_per_month": 100, "max_members": 5, "ai_optimized": True}
-        return {"max_posts_per_month": 10, "max_members": 1, "ai_optimized": False}
+        """Returns feature limits based on organization tier, with dynamic overrides."""
+        from app.services.settings_service import SettingsService
+        settings_service = SettingsService(self.db)
+        
+        limits = settings_service.get_quota_limits(org.subscription_tier.value)
+        
+        # Add non-quota features (like AI optimization)
+        # These could also be migrated to SystemSettings later if needed
+        is_pro_plus = org.subscription_tier in [SubscriptionTier.PRO, SubscriptionTier.AGENCY]
+        limits["ai_optimized"] = is_pro_plus
+        
+        return limits

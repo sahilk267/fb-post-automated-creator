@@ -12,6 +12,7 @@ from app.models.posting_preference import PostingPreference
 from app.models.content_category import ContentCategory
 from app.models.hook_template import HookTemplate
 from app.models.content_execution import ContentPublishStatus
+from app.models.system_setting import SystemSetting
 
 __all__ = [
     "User", "Content", "Media", "AuditLog", "OAuthState", "MetaUserToken", "LinkedInUserToken", "LinkedInAccount",
@@ -19,5 +20,6 @@ __all__ = [
     "MetaPage",
     "ScheduledPost", "ScheduledPostStatus", "PostingPreference",
     "ContentCategory", "HookTemplate", "ContentPublishStatus",
+    "SystemSetting",
 ]
 

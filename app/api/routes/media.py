@@ -1,6 +1,6 @@
 """Media API routes."""
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db

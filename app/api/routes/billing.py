@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.dependencies import get_current_user
 from app.services.billing_service import BillingService
 from app.services.org_service import OrgService
 from pydantic import BaseModel

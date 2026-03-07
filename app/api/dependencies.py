@@ -1,5 +1,5 @@
 """API dependencies: authentication, database."""
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
 from pydantic import ValidationError
@@ -47,4 +47,25 @@ def get_current_active_admin(
             status_code=400, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+
+def check_maintenance_mode(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Check if site is in maintenance mode and block access to most routes."""
+    from app.services.settings_service import SettingsService
+    service = SettingsService(db)
+    
+    if service.is_maintenance_mode():
+        path = request.url.path
+        # Always allow auth and admin settings so we don't lock ourselves out
+        if "/auth/" in path or "/admin/settings" in path or "/api/v1/health" in path:
+            return True
+            
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="System is currently undergoing maintenance. Please try again later."
+        )
+    return True
 

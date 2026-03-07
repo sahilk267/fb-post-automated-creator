@@ -65,6 +65,18 @@ export default function Layout() {
                 </Link>
               ))}
 
+              {user?.is_admin && (
+                <Link
+                  to="/system-settings"
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${location.pathname.startsWith('/system-settings')
+                    ? 'bg-rose-50 text-rose-700 shadow-sm'
+                    : 'text-rose-500 hover:text-rose-600 hover:bg-rose-50'
+                    }`}
+                >
+                  SYSTEM SETTINGS
+                </Link>
+              )}
+
               <div className="h-6 w-px bg-slate-200 mx-2"></div>
 
               <div className="flex items-center gap-3">
