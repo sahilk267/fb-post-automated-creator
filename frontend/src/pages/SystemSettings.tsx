@@ -25,7 +25,7 @@ export default function SystemSettings() {
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [orgs, setOrgs] = useState<AdminOrg[]>([]);
     const [logs, setLogs] = useState<AuditLog[]>([]);
-    const [, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -183,6 +183,7 @@ export default function SystemSettings() {
                 </div>
             </header>
 
+            {loading && <div className="mb-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-500 font-bold text-sm shadow-sm flex items-center gap-3"><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" /></svg>Loading data...</div>}
             {error && <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 font-bold text-sm shadow-sm">{error}</div>}
             {success && <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-700 font-bold text-sm shadow-sm">{success}</div>}
 

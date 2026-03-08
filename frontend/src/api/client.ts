@@ -42,7 +42,10 @@ export async function apiFetch<T>(
   });
 
   if (res.status === 401 || res.status === 403) {
-    // Optional: handle auto-logout or token refresh here
+    localStorage.removeItem(TOKEN_KEY);
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
   }
 
   if (!res.ok) {

@@ -39,12 +39,11 @@ class Settings(BaseSettings):
     secret_key: str = "supersecretkeychangeinproduction"  # In production, set this via env
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    cors_origins: str = "*"  # Comma-separated list, e.g. "http://localhost:5173,https://app.example.com"
 
-    # Storage (local, s3, or gdrive)
-    storage_backend: str = "local"  # "local" | "s3" | "gdrive"
-    aws_access_key_id: Optional[str] = None
-    aws_secret_access_key: Optional[str] = None
-    aws_s3_bucket: Optional[str] = None
+    # Storage ("local" or "gdrive")
+    storage_backend: str = "local"
+    media_dir: str = "data/media"  # Relative to project root, cross-platform
     
     # Google Drive Storage (Phase 6 Pivot)
     google_drive_credentials_json: Optional[str] = None  # JSON string or path to JSON

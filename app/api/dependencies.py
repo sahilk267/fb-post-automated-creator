@@ -59,8 +59,12 @@ def check_maintenance_mode(
     
     if service.is_maintenance_mode():
         path = request.url.path
-        # Always allow auth and admin settings so we don't lock ourselves out
-        if "/auth/" in path or "/admin/settings" in path or "/api/v1/health" in path:
+        # Only allow auth and admin settings (prefix-based, not substring)
+        allowed_prefixes = [
+            f"{settings.api_prefix}/auth/",
+            f"{settings.api_prefix}/admin/settings",
+        ]
+        if any(path.startswith(p) for p in allowed_prefixes):
             return True
             
         raise HTTPException(

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from cryptography.fernet import Fernet
 import base64
 from app.models.system_setting import SystemSetting
+from app.models.organization import SubscriptionTier
 from app.core.config import settings
 
 class SettingsService:
@@ -115,14 +116,14 @@ class SettingsService:
         """Get quota limits for a specific tier from DB or defaults."""
         prefix = f"LIMIT_{tier.upper()}_"
         
-        # Default map
+        # Default map using SubscriptionTier enum values
         defaults = {
-            "FREE": {"max_posts": 10, "max_members": 1},
-            "PRO": {"max_posts": 100, "max_members": 5},
-            "AGENCY": {"max_posts": 500, "max_members": 20}
+            SubscriptionTier.FREE.value: {"max_posts": 10, "max_members": 1},
+            SubscriptionTier.PRO.value: {"max_posts": 100, "max_members": 5},
+            SubscriptionTier.AGENCY.value: {"max_posts": 500, "max_members": 20},
         }
         
-        d = defaults.get(tier.upper(), defaults["FREE"])
+        d = defaults.get(tier.upper(), defaults[SubscriptionTier.FREE.value])
         
         return {
             "max_posts_per_month": int(self.get_setting(f"{prefix}MAX_POSTS") or d["max_posts"]),
@@ -130,30 +131,51 @@ class SettingsService:
         }
 
     def sync_to_env(self):
-        """Sync DB settings to .env file for permanent persistence."""
+        """Sync DB settings to .env file, preserving comments and blank lines."""
         env_path = os.path.join(os.getcwd(), ".env")
         db_settings = self.db.query(SystemSetting).all()
         
-        # Read current .env
-        env_content = {}
-        if os.path.exists(env_path):
-            with open(env_path, "r") as f:
-                for line in f:
-                    if "=" in line:
-                        k, v = line.strip().split("=", 1)
-                        env_content[k] = v
-        
-        # Update with DB (only non-encrypted for safety, or prompt)
+        # Build a map of DB settings to sync
+        updates = {}
         for s in db_settings:
             val = s.value
             if s.is_encrypted:
                 try:
                     val = self.fernet.decrypt(val.encode()).decode()
-                except:
-                    continue # Skip if can't decrypt
-            env_content[s.key] = val
-            
+                except Exception:
+                    continue  # Skip if can't decrypt
+            updates[s.key] = val
+        
+        # Read .env lines preserving comments and structure
+        lines = []
+        seen_keys = set()
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                lines = f.readlines()
+        
+        # Update existing lines in-place
+        new_lines = []
+        for line in lines:
+            stripped = line.strip()
+            # Preserve comments and blank lines
+            if not stripped or stripped.startswith("#"):
+                new_lines.append(line)
+                continue
+            if "=" in stripped:
+                key = stripped.split("=", 1)[0].strip()
+                if key in updates:
+                    new_lines.append(f"{key}={updates[key]}\n")
+                    seen_keys.add(key)
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+        
+        # Append any DB settings not already in the file
+        for key, val in updates.items():
+            if key not in seen_keys:
+                new_lines.append(f"{key}={val}\n")
+        
         # Write back
         with open(env_path, "w") as f:
-            for k, v in env_content.items():
-                f.write(f"{k}={v}\n")
+            f.writelines(new_lines)

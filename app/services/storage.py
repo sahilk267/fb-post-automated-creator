@@ -2,7 +2,7 @@
 
 Provides a StorageProvider interface with two implementations:
   - LocalStorageProvider: saves files to the local filesystem (default).
-  - S3StorageProvider: saves files to AWS S3 (activated via STORAGE_BACKEND=s3 in settings).
+  - GoogleDriveStorageProvider: saves files to Google Drive (activated via STORAGE_BACKEND=gdrive).
 
 Usage:
     from app.services.storage import get_storage_provider
@@ -14,9 +14,14 @@ import os
 import shutil
 import uuid
 from abc import ABC, abstractmethod
+from pathlib import Path
 from fastapi import UploadFile
 
-MEDIA_DIR = "/app/data/media"
+from app.core.config import settings
+
+# Resolve media dir from project root (cross-platform)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+MEDIA_DIR = str(_PROJECT_ROOT / settings.media_dir)
 
 
 class StorageProvider(ABC):
@@ -66,7 +71,6 @@ class GoogleDriveStorageProvider(StorageProvider):
             from google.oauth2 import service_account
             from googleapiclient.discovery import build
             from googleapiclient.http import MediaIoBaseUpload
-            from app.core.config import settings
 
             self.folder_id = settings.google_drive_folder_id
             creds_data = settings.google_drive_credentials_json
@@ -104,20 +108,18 @@ class GoogleDriveStorageProvider(StorageProvider):
 
         file_id = file.get("id")
         
-        # Optional: Make file public so it can be viewed by anyone with the link
+        # Make file public so it can be viewed by anyone with the link
         try:
             self.service.permissions().create(
                 fileId=file_id,
                 body={"type": "anyone", "role": "reader"}
             ).execute()
         except Exception:
-            # Non-critical failure: page might fail to show preview if not public
-            pass
+            pass  # Non-critical: preview may not work if not public
 
         return file_id
 
     def get_public_url(self, stored_path_or_key: str) -> str:
-        # stored_path_or_key is the file_id returned by save()
         return f"https://drive.google.com/uc?id={stored_path_or_key}&export=download"
 
     def delete(self, stored_path_or_key: str) -> None:
@@ -129,10 +131,6 @@ class GoogleDriveStorageProvider(StorageProvider):
 
 def get_storage_provider() -> StorageProvider:
     """Factory: returns the appropriate storage provider based on STORAGE_BACKEND setting."""
-    from app.core.config import settings
-    backend = getattr(settings, "storage_backend", "local")
-    if backend == "s3":
-        return S3StorageProvider()
-    if backend == "gdrive":
+    if settings.storage_backend == "gdrive":
         return GoogleDriveStorageProvider()
     return LocalStorageProvider()

@@ -1,15 +1,12 @@
-"""Media service."""
+"""Media service — handles media DB records and delegates file I/O to StorageProvider."""
 import os
-import shutil
 import uuid
-from typing import Optional
+from typing import Optional, List
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.models.media import Media
-
-# Media storage directory
-MEDIA_DIR = "/app/data/media"
+from app.services.storage import get_storage_provider
 
 
 class MediaService:
@@ -17,9 +14,7 @@ class MediaService:
     
     def __init__(self, db: Session):
         self.db = db
-        # Ensure media directory exists
-        if not os.path.exists(MEDIA_DIR):
-            os.makedirs(MEDIA_DIR, exist_ok=True)
+        self.storage = get_storage_provider()
 
     def _verify_org_access(self, user_id: int, org_id: Optional[int]):
         """Verify that user has access to the organization if specified."""
@@ -35,22 +30,23 @@ class MediaService:
 
     def save_upload(self, upload_file: UploadFile, user_id: int, organization_id: Optional[int] = None) -> Media:
         """
-        Save an uploaded file to disk and create a Media record.
+        Save an uploaded file via StorageProvider and create a Media record.
         """
         if organization_id:
             self._verify_org_access(user_id, organization_id)
             
         # Create a unique filename to avoid collisions
-        ext = os.path.splitext(upload_file.filename)[1]
+        ext = os.path.splitext(upload_file.filename or "")[1]
         unique_filename = f"{uuid.uuid4()}{ext}"
-        stored_path = os.path.join(MEDIA_DIR, unique_filename)
         
-        # Save to disk
-        with open(stored_path, "wb") as buffer:
-            shutil.copyfileobj(upload_file.file, buffer)
+        # Delegate file saving to the storage provider
+        stored_path = self.storage.save(upload_file, unique_filename)
         
-        # Get file size
-        file_size = os.path.getsize(stored_path)
+        # Get file size (works for local files; for cloud, size may not be available)
+        try:
+            file_size = os.path.getsize(stored_path)
+        except (OSError, TypeError):
+            file_size = 0
         
         # Create DB record
         media = Media(
@@ -71,7 +67,7 @@ class MediaService:
         """Get media by ID."""
         return self.db.query(Media).filter(Media.id == media_id).first()
 
-    def list_media(self, user_id: int, organization_id: Optional[int] = None) -> list[Media]:
+    def list_media(self, user_id: int, organization_id: Optional[int] = None) -> List[Media]:
         """List media with organization filtering."""
         query = self.db.query(Media)
         if organization_id:
@@ -80,9 +76,6 @@ class MediaService:
             query = query.filter(Media.user_id == user_id)
         return query.all()
 
-    @staticmethod
-    def get_public_url(media: Media) -> str:
-        """Generate a relative public URL for the media file."""
-        # This assumes /media is mounted as a static directory in FastAPI
-        filename = os.path.basename(media.stored_path)
-        return f"/media/{filename}"
+    def get_public_url(self, media: Media) -> str:
+        """Generate a public URL for the media file via its storage provider."""
+        return self.storage.get_public_url(media.stored_path)

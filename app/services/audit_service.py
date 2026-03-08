@@ -7,6 +7,17 @@ from app.models.audit_log import AuditLog
 class AuditService:
     """Service for creating audit log entries."""
     
+    def __init__(self, db: Session = None):
+        self.db = db
+
+    def log(self, action: str, entity_type: str, entity_id: Optional[int] = None,
+            user_id: Optional[int] = None, description: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None) -> AuditLog:
+        """Instance method — uses self.db. Equivalent to log_action()."""
+        if not self.db:
+            raise ValueError("AuditService requires a db session for instance methods")
+        return self.log_action(self.db, action, entity_type, entity_id, user_id, description, metadata)
+
     @staticmethod
     def log_action(
         db: Session,

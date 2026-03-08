@@ -78,8 +78,21 @@ class BillingService:
         org = self.db.query(Organization).filter(Organization.id == int(org_id)).first()
         if org:
             org.subscription_status = "active"
-            # We can detect the tier from price_id if we maintain a mapping
-            # For now, let's keep it simple or use metadata from checkout session
+            
+            # Determine tier from the price_id used in checkout
+            try:
+                line_items = stripe.checkout.Session.list_line_items(session['id'], limit=1)
+                if line_items and line_items.data:
+                    price_id = line_items.data[0].price.id
+                    if price_id == settings.stripe_agency_price_id:
+                        org.subscription_tier = SubscriptionTier.AGENCY
+                    elif price_id == settings.stripe_pro_price_id:
+                        org.subscription_tier = SubscriptionTier.PRO
+                    else:
+                        org.subscription_tier = SubscriptionTier.FREE
+            except Exception:
+                pass  # If we can't determine tier, status is still updated
+
             self.db.commit()
 
     def _handle_subscription_change(self, subscription):

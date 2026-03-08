@@ -43,9 +43,10 @@ app = FastAPI(
 )
 
 # CORS middleware
+_cors_origins = ["*"] if settings.cors_origins == "*" else [o.strip() for o in settings.cors_origins.split(",")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -173,10 +174,16 @@ async def health_check():
 # Optional: serve frontend (when frontend/dist exists, e.g. after npm run build)
 _frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
-# Media storage static mount
-MEDIA_DIR = "/app/data/media"
+# Media storage static mount — resolved from project root, cross-platform
+_project_root = Path(__file__).resolve().parent.parent
+MEDIA_DIR = str(_project_root / settings.media_dir)
 if not Path(MEDIA_DIR).exists():
     Path(MEDIA_DIR).mkdir(parents=True, exist_ok=True)
+
+# Warn on default secret key
+if settings.secret_key == "supersecretkeychangeinproduction":
+    logger.warning("Using default SECRET_KEY! Change this in production via .env")
+
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 
 if _frontend_dist.is_dir():
